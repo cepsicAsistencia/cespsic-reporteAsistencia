@@ -302,54 +302,139 @@ function handleGenerateReport(e) {
 
 function generateTestPDF(fechaDesde, fechaHasta) {
     try {
-        // Verificar carga de jsPDF
-        if (typeof window.jspdf === 'undefined' && typeof jsPDF === 'undefined') {
-            showStatus('Error: Librería PDF no cargada. Recargue la página.', 'error');
-            return;
-        }
+        // Crear contenido HTML para convertir a PDF
+        const reportContent = generateReportHTML(fechaDesde, fechaHasta);
         
-        // Intentar ambos métodos de acceso a jsPDF
-        let doc;
-        if (typeof jsPDF !== 'undefined') {
-            doc = new jsPDF();
-        } else if (typeof window.jspdf !== 'undefined') {
-            const { jsPDF } = window.jspdf;
-            doc = new jsPDF();
+        // Crear blob con el contenido
+        const blob = new Blob([reportContent], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        
+        // Abrir en nueva ventana para que el usuario pueda guardar como PDF
+        const newWindow = window.open(url, '_blank');
+        
+        if (newWindow) {
+            reportData = {
+                url: url,
+                fechaDesde: fechaDesde,
+                fechaHasta: fechaHasta,
+                totalRegistros: 0,
+                generadoPor: currentUser ? currentUser.name : 'Usuario',
+                fechaGeneracion: new Date().toLocaleString('es-ES')
+            };
+            
+            showDownloadModal();
         } else {
-            showStatus('Error: No se puede acceder a jsPDF.', 'error');
-            return;
+            showStatus('No se pudo abrir ventana. Verifique que no esté bloqueada.', 'error');
         }
-        
-        // Resto de la función igual...
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(16);
-        doc.text('REPORTE DE ASISTENCIAS - CESPSIC', 20, 20);
-        
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(12);
-        doc.text('Período: ' + fechaDesde + ' al ' + fechaHasta, 20, 40);
-        doc.text('Generado por: ' + (currentUser ? currentUser.name : 'Usuario'), 20, 50);
-        doc.text('Fecha: ' + new Date().toLocaleString('es-ES'), 20, 60);
-        doc.text('REPORTE DE PRUEBA - CESPSIC', 20, 80);
-        doc.text('Este es un reporte de prueba generado exitosamente.', 20, 100);
-        
-        reportData = {
-            pdf: doc,
-            fechaDesde: fechaDesde,
-            fechaHasta: fechaHasta,
-            totalRegistros: 0,
-            generadoPor: currentUser ? currentUser.name : 'Usuario',
-            fechaGeneracion: new Date().toLocaleString('es-ES')
-        };
-        
-        showDownloadModal();
         
     } catch (error) {
-        console.error('Error generando PDF:', error);
-        showStatus('Error al generar PDF: ' + error.message, 'error');
+        console.error('Error generando reporte:', error);
+        showStatus('Error al generar reporte: ' + error.message, 'error');
     }
 }
-
+function generateReportHTML(fechaDesde, fechaHasta) {
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte CESPSIC</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
+        .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #667eea; padding-bottom: 20px; }
+        .info { margin-bottom: 20px; background: #f8f9ff; padding: 15px; border-radius: 8px; }
+        .content { margin: 20px 0; }
+        .footer { margin-top: 30px; font-size: 12px; color: #666; text-align: center; border-top: 1px solid #ddd; padding-top: 15px; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #667eea; color: white; }
+        tr:nth-child(even) { background-color: #f2f2f2; }
+        .controls { text-align: center; margin: 20px 0; }
+        .btn { padding: 12px 24px; margin: 5px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-secondary { background: #dc3545; color: white; }
+        @media print {
+            .controls { display: none; }
+            body { margin: 0; }
+        }
+        @media (max-width: 768px) {
+            body { margin: 10px; }
+            table { font-size: 14px; }
+            th, td { padding: 6px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>REPORTE DE ASISTENCIAS - CESPSIC</h1>
+        <h2>Universidad Autónoma de Sinaloa</h2>
+        <h3>Centro de Servicios Psicológicos a la Comunidad</h3>
+    </div>
+    
+    <div class="info">
+        <p><strong>Período:</strong> ${fechaDesde} al ${fechaHasta}</p>
+        <p><strong>Generado por:</strong> ${currentUser ? currentUser.name + ' (' + currentUser.email + ')' : 'Usuario'}</p>
+        <p><strong>Fecha de generación:</strong> ${new Date().toLocaleString('es-ES')}</p>
+        <p><strong>Total de registros:</strong> 0 (Reporte de prueba)</p>
+    </div>
+    
+    <div class="content">
+        <h3>REPORTE DE PRUEBA</h3>
+        <p>Este es un reporte de prueba generado exitosamente. Una vez conectado con Google Sheets, aquí aparecerán los datos reales de asistencia.</p>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Nombre Completo</th>
+                    <th>Tipo Estudiante</th>
+                    <th>Modalidad</th>
+                    <th>Fecha</th>
+                    <th>Hora</th>
+                    <th>Tipo Registro</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Ejemplo Usuario Uno</td>
+                    <td>Servicio Social</td>
+                    <td>Presencial</td>
+                    <td>${fechaDesde}</td>
+                    <td>08:00</td>
+                    <td>Entrada</td>
+                </tr>
+                <tr>
+                    <td>Ejemplo Usuario Dos</td>
+                    <td>Prácticas Supervisadas</td>
+                    <td>Virtual</td>
+                    <td>${fechaHasta}</td>
+                    <td>14:30</td>
+                    <td>Salida</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="controls">
+        <button class="btn btn-primary" onclick="window.print()">
+            📄 Guardar como PDF / Imprimir
+        </button>
+        <button class="btn btn-secondary" onclick="window.close()">
+            ❌ Cerrar
+        </button>
+        <div style="margin-top: 15px; font-size: 14px; color: #666;">
+            <p><strong>Móvil:</strong> Menú → Imprimir → Guardar como PDF</p>
+            <p><strong>Laptop:</strong> Ctrl+P → Destino: Guardar como PDF</p>
+        </div>
+    </div>
+    
+    <div class="footer">
+        <p>Centro de Servicios Psicológicos a la Comunidad (CESPSIC)</p>
+        <p>Universidad Autónoma de Sinaloa</p>
+        <p>Reporte generado el ${new Date().toLocaleString('es-ES')}</p>
+    </div>
+</body>
+</html>`;
+}
 function showDownloadModal() {
     const modal = document.getElementById('download-modal');
     if (modal && reportData) {
@@ -365,15 +450,15 @@ function showDownloadModal() {
 }
 
 function downloadPDF() {
-    if (reportData && reportData.pdf) {
-        const fileName = 'Reporte_CESPSIC_' + reportData.fechaDesde + '_' + reportData.fechaHasta + '.pdf';
-        reportData.pdf.save(fileName);
+    if (reportData && reportData.url) {
+        // Redirigir a la URL del reporte
+        window.open(reportData.url, '_blank');
         
-        showStatus('Archivo PDF descargado exitosamente.', 'success');
+        showStatus('Reporte abierto en nueva ventana. Use el botón "Guardar como PDF".', 'success');
         setTimeout(() => {
             closeDownloadModal();
             hideStatus();
-        }, 2000);
+        }, 3000);
     }
 }
 
