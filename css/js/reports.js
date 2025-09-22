@@ -382,7 +382,7 @@ async function handleGenerateReport(e) {
 async function fetchSheetData(fechaDesde, fechaHasta, filtroEstudiante, filtroModalidad) {
     try {
         // IMPORTANTE: Reemplaza con tu URL de Google Apps Script para reportes
-        const REPORTS_SCRIPT_URL = 'https://script.google.com/macros/s/TU_URL_DE_REPORTES_AQUI/exec';
+        const REPORTS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzQkfQBBdzT50JSxQmRytAvIW1p5LecrQAg9SJ2seV4XYZqAcrPZAoKKAIZVtz7ag0/exec';
         
         const requestData = {
             action: 'get_report_data',
@@ -629,7 +629,7 @@ function calculateStatistics(datos) {
 
 async function logReportGeneration(totalRegistros) {
     try {
-        const REPORTS_SCRIPT_URL = 'https://script.google.com/macros/s/TU_URL_DE_REPORTES_AQUI/exec';
+        const REPORTS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzQkfQBBdzT50JSxQmRytAvIW1p5LecrQAg9SJ2seV4XYZqAcrPZAoKKAIZVtz7ag0/exec';
         
         const logData = {
             action: 'log_report_generation',
