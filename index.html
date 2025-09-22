@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reportes de Asistencia - CESPSIC</title>
+    
+    <!-- Google Sign-In API -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <meta name="google-signin-client_id" content="799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.googleusercontent.com">
+    
+    <!-- jsPDF para generación de PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    
+    <!-- CSS -->
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logos">
+                <img src="https://lh3.googleusercontent.com/d/19ybSSXzb1ko_982HrRi7Kd7dPfN8Peuc" alt="UAS" class="logo">
+                <img src="https://lh3.googleusercontent.com/d/12tYxfzWgy3BVYjadXOEKlX5-uSsxIrBt" alt="CESPSIC" class="logo">
+                <img src="https://lh3.googleusercontent.com/d/1tR9QzPGbydb_qjDkZOKsoNU6_xIBGQP2" alt="Facultad de Psicología" class="logo">
+            </div>
+            <h1>Reportes de Asistencia - Centro de Servicios Psicológicos a la Comunidad (CESPSIC)</h1>
+        </div>
+
+        <!-- Sección de Autenticación -->
+        <div class="auth-section" id="auth-section">
+            <div class="auth-title" id="auth-title">
+                🔒 Autenticación Administrativa Requerida
+            </div>
+            
+            <div class="auth-warning">
+                ⚠️ Esta sección está restringida solo para personal autorizado del CESPSIC
+            </div>
+            
+            <!-- Información del usuario autenticado -->
+            <div class="user-info" id="user-info">
+                <img id="user-avatar" class="user-avatar" src="" alt="Avatar">
+                <div class="user-email" id="user-email"></div>
+                <div class="user-name" id="user-name"></div>
+                <div class="user-role" id="user-role"></div>
+                <button class="signout-btn" onclick="signOut()">🚪 Cerrar Sesión</button>
+            </div>
+            
+            <!-- Botón de inicio de sesión con Google -->
+            <div id="signin-button-container">
+                <button class="google-signin-btn" id="main-signin-btn" onclick="requestAuthentication()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    </svg>
+                    <span id="signin-btn-text">Iniciar Sesión con Google</span>
+                </button>
+            </div>
+            
+            <div class="auth-info" style="margin-top: 15px; padding: 10px; background: #e3f2fd; border-radius: 8px; font-size: 14px; color: #1565c0;">
+                ℹ️ <strong>Acceso Restringido:</strong> Solo personal autorizado del CESPSIC puede generar reportes.
+            </div>
+        </div>
+
+        <!-- Modal de Acceso Denegado -->
+        <div class="modal-overlay" id="access-denied-modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header error">
+                    <h2>🚫 Acceso Denegado</h2>
+                </div>
+                <div class="modal-body">
+                    <p>Su cuenta no tiene permisos para acceder a esta sección.</p>
+                    <p><strong>Esta área está restringida a:</strong></p>
+                    <ul>
+                        <li>Personal administrativo autorizado del CESPSIC</li>
+                        <li>Supervisores académicos</li>
+                        <li>Coordinadores de servicios psicológicos</li>
+                    </ul>
+                    <p>Si considera que debe tener acceso, contacte al administrador del sistema.</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-primary" onclick="closeAccessDeniedModal()">Entendido</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal de Autenticación para Google -->
+        <div class="modal-overlay" id="google-auth-modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>🔐 Autenticación Administrativa</h2>
+                </div>
+                <div class="modal-body">
+                    <p>Haga clic en el botón azul para autenticarse con su cuenta autorizada:</p>
+                    <div id="google-button-container" style="margin: 20px 0; text-align: center;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-reject" onclick="closeAuthModal()">Cancelar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Formulario de Reportes (inicialmente deshabilitado) -->
+        <div class="form-overlay" id="reports-container">
+            <div class="reports-section">
+                <h2>📊 Generador de Reportes de Asistencia</h2>
+                
+                <form id="reportsForm">
+                    <div class="form-section">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="fecha_desde">Fecha Desde <span class="required">*</span></label>
+                                <input type="date" id="fecha_desde" name="fecha_desde" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="fecha_hasta">Fecha Hasta <span class="required">*</span></label>
+                                <input type="date" id="fecha_hasta" name="fecha_hasta" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-group">
+                            <label for="filtro_estudiante">Filtro por Tipo de Estudiante (opcional)</label>
+                            <select id="filtro_estudiante" name="filtro_estudiante">
+                                <option value="">Todos los tipos</option>
+                                <option value="estancia_profesional">Estancia Profesional</option>
+                                <option value="practicas_supervisadas">Prácticas Supervisadas</option>
+                                <option value="servicio_social">Servicio Social</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-group">
+                            <label for="filtro_modalidad">Filtro por Modalidad (opcional)</label>
+                            <select id="filtro_modalidad" name="filtro_modalidad">
+                                <option value="">Todas las modalidades</option>
+                                <option value="presencial">Presencial</option>
+                                <option value="virtual">Virtual</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="status" id="status"></div>
+                    
+                    <button type="submit" class="submit-btn" id="generate_btn" disabled>
+                        🔒 Autentíquese para generar reportes
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Modal de Generación y Descarga -->
+        <div class="modal-overlay" id="download-modal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header success">
+                    <h2>📄 Reporte Generado</h2>
+                </div>
+                <div class="modal-body">
+                    <div class="report-info">
+                        <p><strong>Reporte de Asistencias CESPSIC</strong></p>
+                        <p>Período: <span id="report-period"></span></p>
+                        <p>Total de registros: <span id="report-count"></span></p>
+                        <p>Generado por: <span id="report-user"></span></p>
+                        <p>Fecha de generación: <span id="report-date"></span></p>
+                    </div>
+                    <div class="download-actions">
+                        <button class="btn-download" id="download-btn">
+                            📥 Descargar PDF
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn-primary" onclick="closeDownloadModal()">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="js/reports.js"></script>
+</body>
+</html>
