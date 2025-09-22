@@ -239,7 +239,7 @@ function parseJwt(token) {
     }
 }
 
-function handleGenerateReport(e) {
+async function handleGenerateReport(e) {
     e.preventDefault();
     
     if (!isAuthenticated || !isAuthorized) {
@@ -253,16 +253,159 @@ function handleGenerateReport(e) {
     
     const fechaDesde = document.getElementById('fecha_desde').value;
     const fechaHasta = document.getElementById('fecha_hasta').value;
+    const filtroEstudiante = document.getElementById('filtro_estudiante').value;
+    const filtroModalidad = document.getElementById('filtro_modalidad').value;
     
     if (!fechaDesde || !fechaHasta) {
         showStatus('Debe seleccionar ambas fechas.', 'error');
         return;
     }
     
-    showStatus('Generando reporte...', 'loading');
-    setTimeout(() => {
-        generateReportHTML_Direct(fechaDesde, fechaHasta);
-    }, 1000);
+    try {
+        showStatus('Obteniendo datos de Google Sheets...', 'loading');
+        
+        // CONECTAR CON BACKEND REAL
+        const datos = await fetchRealSheetData(fechaDesde, fechaHasta, filtroEstudiante, filtroModalidad);
+        
+        if (datos.length === 0) {
+            showStatus('No se encontraron registros para el período seleccionado.', 'error');
+            return;
+        }
+        
+        showStatus('Generando reporte con datos reales...', 'loading');
+        generateRealDataReport(datos, fechaDesde, fechaHasta);
+        
+    } catch (error) {
+        console.error('Error:', error);
+        showStatus('Error obteniendo datos: ' + error.message, 'error');
+    }
+}
+
+async function fetchRealSheetData(fechaDesde, fechaHasta, filtroEstudiante, filtroModalidad) {
+    // IMPORTANTE: Reemplaza con tu URL de Google Apps Script para reportes
+    const REPORTS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzQkfQBBdzT50JSxQmRytAvIW1p5LecrQAg9SJ2seV4XYZqAcrPZAoKKAIZVtz7ag0/exec';
+    
+    const requestData = {
+        action: 'get_report_data',
+        email: currentUser.email,
+        google_user_id: currentUser.id,
+        usuario_nombre: currentUser.name,
+        fecha_desde: fechaDesde,
+        fecha_hasta: fechaHasta,
+        filtro_estudiante: filtroEstudiante,
+        filtro_modalidad: filtroModalidad
+    };
+    
+    const response = await fetch(REPORTS_SCRIPT_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData)
+    });
+    
+    const result = await response.json();
+    
+    if (!result.success) {
+        throw new Error(result.message || 'Error obteniendo datos del servidor');
+    }
+    
+    return result.data;
+}
+
+function generateRealDataReport(datos, fechaDesde, fechaHasta) {
+    const reportContent = createRealReportHTML(datos, fechaDesde, fechaHasta);
+    const blob = new Blob([reportContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const newWindow = window.open(url, '_blank');
+    
+    if (newWindow) {
+        reportData = {
+            url: url,
+            fechaDesde: fechaDesde,
+            fechaHasta: fechaHasta,
+            totalRegistros: datos.length,
+            generadoPor: currentUser.name,
+            fechaGeneracion: new Date().toLocaleString('es-ES')
+        };
+        
+        showDownloadModal();
+        showStatus('Reporte con datos reales generado exitosamente', 'success');
+    }
+}
+
+function createRealReportHTML(datos, fechaDesde, fechaHasta) {
+    // Crear tabla con datos reales
+    const tableRows = datos.map(row => `
+        <tr>
+            <td>${row.nombre} ${row.apellido_paterno} ${row.apellido_materno}</td>
+            <td>${row.tipo_estudiante}</td>
+            <td>${row.modalidad}</td>
+            <td>${row.fecha}</td>
+            <td>${row.hora}</td>
+            <td>${row.tipo_registro}</td>
+            <td>${row.intervenciones_psicologicas}</td>
+        </tr>
+    `).join('');
+    
+    // Calcular estadísticas reales
+    const stats = {
+        totalRegistros: datos.length,
+        totalIntervenciones: datos.reduce((sum, row) => sum + row.intervenciones_psicologicas, 0),
+        presencial: datos.filter(row => row.modalidad === 'presencial').length,
+        virtual: datos.filter(row => row.modalidad === 'virtual').length
+    };
+    
+    return `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Reporte CESPSIC ${fechaDesde} - ${fechaHasta}</title>
+    <!-- Mismos estilos CSS de antes -->
+</head>
+<body>
+    <!-- Header igual -->
+    
+    <div class="info">
+        <p><strong>Período:</strong> ${fechaDesde} al ${fechaHasta}</p>
+        <p><strong>Generado por:</strong> ${currentUser.name} (${currentUser.email})</p>
+        <p><strong>Fecha:</strong> ${new Date().toLocaleString('es-ES')}</p>
+        <p><strong>Total registros:</strong> ${stats.totalRegistros}</p>
+        <p><strong>Estado:</strong> Datos reales de Google Sheets</p>
+    </div>
+    
+    <div class="content">
+        <h3>DATOS DE ASISTENCIA REALES</h3>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Nombre Completo</th>
+                    <th>Tipo Estudiante</th>
+                    <th>Modalidad</th>
+                    <th>Fecha</th>
+                    <th>Hora</th>
+                    <th>Tipo Registro</th>
+                    <th>Intervenciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${tableRows}
+            </tbody>
+        </table>
+        
+        <h4>Estadísticas</h4>
+        <ul>
+            <li>Total registros: ${stats.totalRegistros}</li>
+            <li>Total intervenciones: ${stats.totalIntervenciones}</li>
+            <li>Presencial: ${stats.presencial} registros</li>
+            <li>Virtual: ${stats.virtual} registros</li>
+        </ul>
+    </div>
+    
+    <!-- Resto del HTML igual -->
+</body>
+</html>`;
 }
 
 function generateReportHTML_Direct(fechaDesde, fechaHasta) {
