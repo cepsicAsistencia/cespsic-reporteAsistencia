@@ -4,13 +4,9 @@ let isAuthenticated = false;
 let isAuthorized = false;
 let reportData = null;
 
-// IMPORTANTE: Reemplaza con tu Google Client ID
 const GOOGLE_CLIENT_ID = '799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.googleusercontent.com';
-
-// ID del Google Sheet con los datos de asistencia
 const SHEET_ID = '146Q1MG0AUCnzacqrN5kBENRuiql8o07Uts-l_gimL2I';
 
-// Emails autorizados para generar reportes
 const AUTHORIZED_EMAILS = [
     'jose.lino.flores.madrigal@gmail.com',
     'CEPSIC.atencionpsicologica@gmail.com',
@@ -19,8 +15,7 @@ const AUTHORIZED_EMAILS = [
 
 // Inicializar aplicación
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('=== INICIANDO APLICACIÓN DE REPORTES ===');
-    
+    console.log('Iniciando aplicación de reportes');
     initializeForm();
     setupEventListeners();
     loadGoogleSignInScript();
@@ -65,21 +60,8 @@ function validateDates() {
 function loadGoogleSignInScript() {
     if (typeof google !== 'undefined' && google.accounts) {
         initializeGoogleSignIn();
-        blockGooglePrompts();
     } else {
         setTimeout(loadGoogleSignInScript, 100);
-    }
-}
-
-function blockGooglePrompts() {
-    try {
-        if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-            google.accounts.id.disableAutoSelect();
-            google.accounts.id.cancel();
-            console.log('Google prompts bloqueados');
-        }
-    } catch (error) {
-        console.error('Error bloqueando prompts:', error);
     }
 }
 
@@ -91,17 +73,14 @@ function initializeGoogleSignIn() {
             auto_select: false,
             cancel_on_tap_outside: true
         });
-
-        console.log('Google Sign-In inicializado para reportes');
-
+        console.log('Google Sign-In inicializado');
     } catch (error) {
         console.error('Error inicializando Google Sign-In:', error);
-        showStatus('Error cargando sistema de autenticación.', 'error');
     }
 }
 
 function requestAuthentication() {
-    console.log('Solicitud de autenticación administrativa');
+    console.log('Solicitud de autenticación');
     showAuthModal();
 }
 
@@ -109,7 +88,6 @@ function showAuthModal() {
     const modal = document.getElementById('google-auth-modal');
     if (modal) {
         modal.style.display = 'flex';
-        
         setTimeout(() => {
             const buttonContainer = document.getElementById('google-button-container');
             if (buttonContainer && typeof google !== 'undefined') {
@@ -137,7 +115,6 @@ function handleCredentialResponse(response) {
         closeAuthModal();
         
         const userInfo = parseJwt(response.credential);
-        
         currentUser = {
             id: userInfo.sub,
             email: userInfo.email,
@@ -156,10 +133,9 @@ function handleCredentialResponse(response) {
         } else {
             handleUnauthorizedLogin();
         }
-
     } catch (error) {
         console.error('Error procesando credenciales:', error);
-        showStatus('Error en la autenticación. Intente nuevamente.', 'error');
+        showStatus('Error en la autenticación.', 'error');
     }
 }
 
@@ -176,20 +152,13 @@ function handleAuthorizedLogin() {
     
     updateAuthenticationUI(userRole);
     enableReportsForm();
-    
-    showStatus('Bienvenido. Acceso autorizado para generar reportes.', 'success');
+    showStatus('Acceso autorizado para generar reportes.', 'success');
     setTimeout(() => hideStatus(), 3000);
 }
 
 function handleUnauthorizedLogin() {
-    isAuthenticated = true;
-    isAuthorized = false;
-    
     showAccessDeniedModal();
-    
-    setTimeout(() => {
-        signOut();
-    }, 5000);
+    setTimeout(() => signOut(), 5000);
 }
 
 function showAccessDeniedModal() {
@@ -215,14 +184,13 @@ function updateAuthenticationUI(userRole) {
     if (isAuthenticated && isAuthorized) {
         authSection.classList.add('authenticated');
         authTitle.textContent = 'Acceso Autorizado';
-        authTitle.classList.add('authenticated');
-
+        
         document.getElementById('user-avatar').src = currentUser.picture;
         document.getElementById('user-email').textContent = currentUser.email;
         document.getElementById('user-name').textContent = currentUser.name;
         document.getElementById('user-role').textContent = userRole;
         userInfo.classList.add('show');
-
+        
         signinContainer.style.display = 'none';
     }
 }
@@ -242,7 +210,7 @@ function enableReportsForm() {
 
 function signOut() {
     try {
-        if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+        if (typeof google !== 'undefined' && google.accounts) {
             google.accounts.id.disableAutoSelect();
         }
         
@@ -250,9 +218,8 @@ function signOut() {
         isAuthorized = false;
         currentUser = null;
         reportData = null;
-
+        
         location.reload();
-
     } catch (error) {
         console.error('Error cerrando sesión:', error);
     }
@@ -292,26 +259,17 @@ function handleGenerateReport(e) {
         return;
     }
     
-    // Simulación para prueba - en implementación real conectar con backend
-    showStatus('Generando reporte de prueba...', 'loading');
-    
+    showStatus('Generando reporte...', 'loading');
     setTimeout(() => {
-        generateTestPDF(fechaDesde, fechaHasta);
-    }, 2000);
+        generateReportHTML_Direct(fechaDesde, fechaHasta);
+    }, 1000);
 }
 
-function generateTestPDF(fechaDesde, fechaHasta) {
+function generateReportHTML_Direct(fechaDesde, fechaHasta) {
     try {
-        showStatus('Generando reporte HTML...', 'loading');
-        
-        // Crear contenido HTML para convertir a PDF
-        const reportContent = generateReportHTML(fechaDesde, fechaHasta);
-        
-        // Crear blob con el contenido
+        const reportContent = createReportHTML(fechaDesde, fechaHasta);
         const blob = new Blob([reportContent], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
-        
-        // Abrir en nueva ventana
         const newWindow = window.open(url, '_blank');
         
         if (newWindow) {
@@ -324,47 +282,44 @@ function generateTestPDF(fechaDesde, fechaHasta) {
                 fechaGeneracion: new Date().toLocaleString('es-ES')
             };
             
-            showStatus('Reporte generado exitosamente', 'success');
             showDownloadModal();
+            showStatus('Reporte generado exitosamente', 'success');
         } else {
-            showStatus('No se pudo abrir ventana. Verifique que no esté bloqueada por el navegador.', 'error');
+            showStatus('Verifique que las ventanas emergentes estén permitidas.', 'error');
         }
-        
     } catch (error) {
-        console.error('Error generando reporte:', error);
-        showStatus('Error al generar reporte: ' + error.message, 'error');
+        console.error('Error:', error);
+        showStatus('Error generando reporte: ' + error.message, 'error');
     }
 }
 
-function generateReportHTML(fechaDesde, fechaHasta) {
-    return `
-<!DOCTYPE html>
+function createReportHTML(fechaDesde, fechaHasta) {
+    return `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Reporte CESPSIC</title>
+    <title>Reporte CESPSIC ${fechaDesde} - ${fechaHasta}</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; line-height: 1.6; }
-        .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #667eea; padding-bottom: 20px; }
-        .info { margin-bottom: 20px; background: #f8f9ff; padding: 15px; border-radius: 8px; }
+        .header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #667eea; padding-bottom: 20px; }
+        .info { background: #f8f9ff; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
         .content { margin: 20px 0; }
-        .footer { margin-top: 30px; font-size: 12px; color: #666; text-align: center; border-top: 1px solid #ddd; padding-top: 15px; }
         table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background-color: #667eea; color: white; }
-        tr:nth-child(even) { background-color: #f2f2f2; }
-        .controls { text-align: center; margin: 20px 0; }
-        .btn { padding: 12px 24px; margin: 5px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #667eea; color: white; font-weight: bold; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .controls { text-align: center; margin: 30px 0; }
+        .btn { padding: 15px 30px; margin: 10px; border: none; border-radius: 8px; font-size: 16px; cursor: pointer; font-weight: bold; }
         .btn-primary { background: #667eea; color: white; }
         .btn-secondary { background: #dc3545; color: white; }
-        @media print {
-            .controls { display: none; }
-            body { margin: 0; }
-        }
-        @media (max-width: 768px) {
-            body { margin: 10px; }
-            table { font-size: 14px; }
-            th, td { padding: 6px; }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .footer { text-align: center; margin-top: 40px; font-size: 12px; color: #666; border-top: 1px solid #ddd; padding-top: 20px; }
+        @media print { .controls { display: none; } body { margin: 0; } }
+        @media (max-width: 768px) { 
+            body { margin: 10px; } 
+            table { font-size: 14px; } 
+            th, td { padding: 8px; }
+            .btn { padding: 12px 20px; font-size: 14px; }
         }
     </style>
 </head>
@@ -376,46 +331,58 @@ function generateReportHTML(fechaDesde, fechaHasta) {
     </div>
     
     <div class="info">
-        <p><strong>Período:</strong> ${fechaDesde} al ${fechaHasta}</p>
-        <p><strong>Generado por:</strong> ${currentUser ? currentUser.name + ' (' + currentUser.email + ')' : 'Usuario'}</p>
+        <p><strong>Período de consulta:</strong> ${fechaDesde} al ${fechaHasta}</p>
+        <p><strong>Generado por:</strong> ${currentUser ? currentUser.name + ' (' + currentUser.email + ')' : 'Usuario de prueba'}</p>
         <p><strong>Fecha de generación:</strong> ${new Date().toLocaleString('es-ES')}</p>
-        <p><strong>Total de registros:</strong> 0 (Reporte de prueba)</p>
+        <p><strong>Total de registros:</strong> 2 (Datos de ejemplo)</p>
+        <p><strong>Estado:</strong> Reporte de prueba - Conectar con Google Sheets para datos reales</p>
     </div>
     
     <div class="content">
-        <h3>REPORTE DE PRUEBA</h3>
-        <p>Este es un reporte de prueba generado exitosamente. Una vez conectado con Google Sheets, aquí aparecerán los datos reales de asistencia.</p>
+        <h3>DATOS DE ASISTENCIA</h3>
+        <p>Los siguientes son datos de ejemplo. Una vez conectado el backend, aquí aparecerán los registros reales del período seleccionado.</p>
         
         <table>
             <thead>
                 <tr>
                     <th>Nombre Completo</th>
-                    <th>Tipo Estudiante</th>
+                    <th>Tipo de Estudiante</th>
                     <th>Modalidad</th>
                     <th>Fecha</th>
                     <th>Hora</th>
-                    <th>Tipo Registro</th>
+                    <th>Tipo de Registro</th>
+                    <th>Intervenciones</th>
                 </tr>
             </thead>
             <tbody>
                 <tr>
-                    <td>Ejemplo Usuario Uno</td>
+                    <td>María González López</td>
                     <td>Servicio Social</td>
                     <td>Presencial</td>
                     <td>${fechaDesde}</td>
                     <td>08:00</td>
                     <td>Entrada</td>
+                    <td>3</td>
                 </tr>
                 <tr>
-                    <td>Ejemplo Usuario Dos</td>
+                    <td>Carlos Rodríguez Hernández</td>
                     <td>Prácticas Supervisadas</td>
                     <td>Virtual</td>
                     <td>${fechaHasta}</td>
                     <td>14:30</td>
                     <td>Salida</td>
+                    <td>5</td>
                 </tr>
             </tbody>
         </table>
+        
+        <h4>Resumen Estadístico</h4>
+        <ul>
+            <li>Total de estudiantes únicos: 2</li>
+            <li>Total de intervenciones psicológicas: 8</li>
+            <li>Modalidad presencial: 1 registro</li>
+            <li>Modalidad virtual: 1 registro</li>
+        </ul>
     </div>
     
     <div class="controls">
@@ -423,22 +390,25 @@ function generateReportHTML(fechaDesde, fechaHasta) {
             📄 Guardar como PDF / Imprimir
         </button>
         <button class="btn btn-secondary" onclick="window.close()">
-            ❌ Cerrar
+            ❌ Cerrar Ventana
         </button>
-        <div style="margin-top: 15px; font-size: 14px; color: #666;">
-            <p><strong>Móvil:</strong> Menú → Imprimir → Guardar como PDF</p>
-            <p><strong>Laptop:</strong> Ctrl+P → Destino: Guardar como PDF</p>
+        <div style="margin-top: 20px; font-size: 14px; color: #666;">
+            <p><strong>Instrucciones:</strong></p>
+            <p><strong>Móvil:</strong> Menú (⋮) → Imprimir → Guardar como PDF</p>
+            <p><strong>Computadora:</strong> Ctrl+P → Destino: Guardar como PDF</p>
         </div>
     </div>
     
     <div class="footer">
-        <p>Centro de Servicios Psicológicos a la Comunidad (CESPSIC)</p>
+        <p><strong>Centro de Servicios Psicológicos a la Comunidad (CESPSIC)</strong></p>
         <p>Universidad Autónoma de Sinaloa</p>
+        <p>Facultad de Psicología</p>
         <p>Reporte generado el ${new Date().toLocaleString('es-ES')}</p>
     </div>
 </body>
 </html>`;
 }
+
 function showDownloadModal() {
     const modal = document.getElementById('download-modal');
     if (modal && reportData) {
@@ -447,18 +417,15 @@ function showDownloadModal() {
         document.getElementById('report-user').textContent = reportData.generadoPor;
         document.getElementById('report-date').textContent = reportData.fechaGeneracion;
         
-        document.getElementById('download-btn').onclick = downloadPDF;
-        
+        document.getElementById('download-btn').onclick = downloadReport;
         modal.style.display = 'flex';
     }
 }
 
-function downloadPDF() {
+function downloadReport() {
     if (reportData && reportData.url) {
-        // Redirigir a la URL del reporte
         window.open(reportData.url, '_blank');
-        
-        showStatus('Reporte abierto en nueva ventana. Use el botón "Guardar como PDF".', 'success');
+        showStatus('Reporte abierto. Use "Guardar como PDF" en la nueva ventana.', 'success');
         setTimeout(() => {
             closeDownloadModal();
             hideStatus();
