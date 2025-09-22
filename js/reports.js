@@ -302,14 +302,25 @@ function handleGenerateReport(e) {
 
 function generateTestPDF(fechaDesde, fechaHasta) {
     try {
-        if (typeof window.jsPDF === 'undefined') {
-            showStatus('Error: Librería PDF no cargada.', 'error');
+        // Verificar carga de jsPDF
+        if (typeof window.jspdf === 'undefined' && typeof jsPDF === 'undefined') {
+            showStatus('Error: Librería PDF no cargada. Recargue la página.', 'error');
             return;
         }
         
-        const { jsPDF } = window.jsPDF;
-        const doc = new jsPDF();
+        // Intentar ambos métodos de acceso a jsPDF
+        let doc;
+        if (typeof jsPDF !== 'undefined') {
+            doc = new jsPDF();
+        } else if (typeof window.jspdf !== 'undefined') {
+            const { jsPDF } = window.jspdf;
+            doc = new jsPDF();
+        } else {
+            showStatus('Error: No se puede acceder a jsPDF.', 'error');
+            return;
+        }
         
+        // Resto de la función igual...
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(16);
         doc.text('REPORTE DE ASISTENCIAS - CESPSIC', 20, 20);
@@ -319,7 +330,8 @@ function generateTestPDF(fechaDesde, fechaHasta) {
         doc.text('Período: ' + fechaDesde + ' al ' + fechaHasta, 20, 40);
         doc.text('Generado por: ' + (currentUser ? currentUser.name : 'Usuario'), 20, 50);
         doc.text('Fecha: ' + new Date().toLocaleString('es-ES'), 20, 60);
-        doc.text('REPORTE DE PRUEBA', 20, 80);
+        doc.text('REPORTE DE PRUEBA - CESPSIC', 20, 80);
+        doc.text('Este es un reporte de prueba generado exitosamente.', 20, 100);
         
         reportData = {
             pdf: doc,
