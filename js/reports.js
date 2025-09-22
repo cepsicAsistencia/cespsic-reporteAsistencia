@@ -8,6 +8,9 @@ let pdfBlob = null;
 const GOOGLE_CLIENT_ID = '799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.googleusercontent.com';
 const SHEET_ID = '146Q1MG0AUCnzacqrN5kBENRuiql8o07Uts-l_gimL2I';
 
+// IMPORTANTE: Reemplazar con la URL de tu Google Apps Script deployment
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzhkh8KZSA3BWEi01lgC6Bpwm2Gyfufy5_npN9N2ajY_u5-h6T180TsS0jI7M5l_h0/exec';
+
 // Usuarios autorizados para generar reportes
 const AUTHORIZED_USERS = [
     'jose.lino.flores.madrigal@gmail.com',
@@ -233,14 +236,19 @@ function enableForm() {
     formContainer.classList.add('authenticated');
     updateSubmitButton();
     
-    // Validar acceso al backend cuando se autentica
-    validateBackendAccess();
+    // Solo validar backend si la URL está configurada
+    if (GOOGLE_SCRIPT_URL !== 'https://script.google.com/macros/s/AKfycbzhkh8KZSA3BWEi01lgC6Bpwm2Gyfufy5_npN9N2ajY_u5-h6T180TsS0jI7M5l_h0/exec') {
+        validateBackendAccess();
+    } else {
+        console.warn('⚠️ Backend no configurado. Actualizar GOOGLE_SCRIPT_URL en script.js');
+        showStatus('Advertencia: Sistema backend no configurado. Contacte al administrador.', 'error');
+    }
 }
 
 // Función para validar acceso al backend
 async function validateBackendAccess() {
     try {
-        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzhkh8KZSA3BWEi01lgC6Bpwm2Gyfufy5_npN9N2ajY_u5-h6T180TsS0jI7M5l_h0/exec';
+        console.log('🔗 Validando conexión con backend...');
         
         const response = await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
@@ -254,18 +262,24 @@ async function validateBackendAccess() {
             })
         });
         
+        if (!response.ok) {
+            throw new Error(`Error del servidor: ${response.status} ${response.statusText}`);
+        }
+        
         const result = await response.json();
         
         if (result.success) {
             console.log('✅ Acceso al backend validado:', result);
+            showStatus('Conexión con sistema backend verificada correctamente.', 'success');
+            setTimeout(() => hideStatus(), 3000);
         } else {
             console.error('❌ Error validando backend:', result.message);
-            showStatus('Error de conexión con el sistema backend.', 'error');
+            showStatus('Error de conexión con el sistema backend: ' + result.message, 'error');
         }
         
     } catch (error) {
         console.error('Error validando backend:', error);
-        showStatus('Advertencia: No se pudo validar la conexión con el sistema.', 'error');
+        showStatus('No se pudo conectar con el sistema backend. Verifique la configuración.', 'error');
     }
 }
 
@@ -372,8 +386,10 @@ async function handleFormSubmit(e) {
 
 async function fetchAttendanceData(fechaDesde, fechaHasta) {
     try {
-        // IMPORTANTE: Reemplazar con la URL de tu Google Apps Script deployment
-        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzhkh8KZSA3BWEi01lgC6Bpwm2Gyfufy5_npN9N2ajY_u5-h6T180TsS0jI7M5l_h0/exec';
+        // Verificar que el backend esté configurado
+        if (GOOGLE_SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbzhkh8KZSA3BWEi01lgC6Bpwm2Gyfufy5_npN9N2ajY_u5-h6T180TsS0jI7M5l_h0/exec') {
+            throw new Error('Sistema backend no configurado. Contacte al administrador.');
+        }
         
         const requestData = {
             action: 'get_attendance_data',
@@ -396,7 +412,7 @@ async function fetchAttendanceData(fechaDesde, fechaHasta) {
         });
         
         if (!response.ok) {
-            throw new Error(`Error del servidor: ${response.status}`);
+            throw new Error(`Error del servidor: ${response.status} ${response.statusText}`);
         }
         
         const result = await response.json();
