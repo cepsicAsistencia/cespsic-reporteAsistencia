@@ -3,6 +3,8 @@ let currentUser = null;
 let isAuthenticated = false;
 let isAuthorized = false;
 let reportData = null;
+let googleInitialized = false;
+let pendingAuthRequest = false;
 
 const GOOGLE_CLIENT_ID = '799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.googleusercontent.com';
 const SHEET_ID = '146Q1MG0AUCnzacqrN5kBENRuiql8o07Uts-l_gimL2I';
@@ -81,15 +83,15 @@ function validateDates() {
     return true;
 }
 
+// Variables para controlar la inicialización
+let googleInitialized = false;
+let pendingAuthRequest = false;
+
 function loadGoogleSignInScript() {
-    console.log('Verificando Google APIs...');
-    
     if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-        console.log('Google APIs disponibles, inicializando...');
         initializeGoogleSignIn();
     } else {
-        console.log('Google APIs no disponibles, reintentando...');
-        setTimeout(loadGoogleSignInScript, 500); // Aumentar tiempo de espera
+        setTimeout(loadGoogleSignInScript, 200);
     }
 }
 
@@ -101,202 +103,122 @@ function initializeGoogleSignIn() {
             client_id: GOOGLE_CLIENT_ID,
             callback: handleCredentialResponse,
             auto_select: false,
-            cancel_on_tap_outside: true,
-            use_fedcm_for_prompt: true // Agregar esta opción
+            cancel_on_tap_outside: true
         });
         
+        googleInitialized = true;
         console.log('Google Sign-In inicializado correctamente');
         
-        // Verificar que funciona
-        if (google.accounts.id.renderButton) {
-            console.log('Función renderButton disponible');
-        } else {
-            console.error('Función renderButton NO disponible');
+        // Si había una solicitud pendiente, procesarla ahora
+        if (pendingAuthRequest) {
+            pendingAuthRequest = false;
+            requestAuthentication();
         }
         
     } catch (error) {
         console.error('Error inicializando Google Sign-In:', error);
-        
-        // Mostrar error al usuario
-        setTimeout(() => {
-            alert('Error inicializando autenticación. Recargue la página.');
-        }, 1000);
     }
 }
 
 function requestAuthentication() {
-    console.log('Solicitud de autenticación iniciada');
+    console.log('Solicitud de autenticación...');
     
-    // Verificar que Google esté disponible
-    if (typeof google === 'undefined') {
-        alert('Google Sign-In no está disponible. Recargue la página.');
+    // Si Google no está inicializado, marcar como pendiente
+    if (!googleInitialized) {
+        console.log('Google no inicializado, marcando como pendiente...');
+        pendingAuthRequest = true;
         return;
     }
     
-    // Mostrar modal
-    const modal = document.getElementById('google-auth-modal');
-    if (!modal) {
-        alert('Error: Modal de autenticación no encontrado');
-        return;
-    }
-    
-    modal.style.display = 'flex';
-    
-    // Esperar y renderizar botón
-    setTimeout(() => {
-        const buttonContainer = document.getElementById('google-button-container');
-        
-        if (!buttonContainer) {
-            alert('Error: Contenedor del botón no encontrado');
-            return;
-        }
-        
-        // Limpiar contenedor
-        buttonContainer.innerHTML = '';
-        
-        try {
-            // Intentar renderizar botón de Google
-            google.accounts.id.renderButton(buttonContainer, {
-                theme: "filled_blue",
-                size: "large",
-                text: "signin_with",
-                shape: "rectangular",
-                width: 280
-            });
-            
-            console.log('Botón renderizado exitosamente');
-            
-        } catch (error) {
-            console.error('Error renderizando botón:', error);
-            
-            // Crear botón manual como fallback
-            buttonContainer.innerHTML = `
-                <div style="text-align: center;">
-                    <p style="margin-bottom: 15px; color: #333;">Haga clic para autenticarse:</p>
-                    <button onclick="triggerGoogleAuth()" style="
-                        background: #4285f4; 
-                        color: white; 
-                        border: none; 
-                        padding: 12px 24px; 
-                        border-radius: 6px; 
-                        font-size: 16px; 
-                        cursor: pointer;
-                        display: flex;
-                        align-items: center;
-                        gap: 10px;
-                        margin: 0 auto;
-                    ">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                        </svg>
-                        Iniciar Sesión con Google
-                    </button>
-                </div>
-            `;
-        }
-    }, 500);
-}
-
-function triggerGoogleAuth() {
-    try {
-        console.log('Activando autenticación manual...');
-        
-        if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-            // Intentar prompt directo
-            google.accounts.id.prompt((notification) => {
-                console.log('Resultado del prompt:', notification);
-                if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-                    // Si el prompt no se muestra, intentar otra alternativa
-                    alert('Por favor, habilite las ventanas emergentes y recargue la página.');
-                }
-            });
-        } else {
-            alert('Google Sign-In no está disponible. Verifique su conexión a internet y recargue la página.');
-        }
-    } catch (error) {
-        console.error('Error en autenticación manual:', error);
-        alert('Error de autenticación. Recargue la página e intente nuevamente.');
-    }
+    showAuthModal();
 }
 
 function showAuthModal() {
     const modal = document.getElementById('google-auth-modal');
-    if (modal) {
-        modal.style.display = 'flex';
+    if (!modal) return;
+    
+    modal.style.display = 'flex';
+    
+    // ESPERAR antes de renderizar el botón
+    setTimeout(() => {
+        renderGoogleButton();
+    }, 500); // Tiempo suficiente para que el modal sea visible
+}
+
+function renderGoogleButton() {
+    const container = document.getElementById('google-button-container');
+    if (!container) {
+        console.error('Contenedor del botón no encontrado');
+        return;
+    }
+    
+    // Verificar que Google esté completamente listo
+    if (!googleInitialized || typeof google === 'undefined' || !google.accounts || !google.accounts.id) {
+        console.error('Google Sign-In no está listo');
+        showFallbackButton(container);
+        return;
+    }
+    
+    // Limpiar contenedor
+    container.innerHTML = '';
+    
+    try {
+        // AHORA sí renderizar el botón oficial
+        google.accounts.id.renderButton(container, {
+            theme: "filled_blue",
+            size: "large",
+            text: "signin_with",
+            shape: "rectangular",
+            width: 280
+        });
         
-        // Esperar a que el modal sea visible antes de renderizar el botón
-        setTimeout(() => {
-            const buttonContainer = document.getElementById('google-button-container');
-            if (buttonContainer && typeof google !== 'undefined' && google.accounts) {
-                try {
-                    // Limpiar contenido previo
-                    buttonContainer.innerHTML = '';
-                    
-                    // Renderizar botón de Google
-                    google.accounts.id.renderButton(buttonContainer, {
-                        theme: "filled_blue",
-                        size: "large",
-                        text: "signin_with",
-                        shape: "rectangular",
-                        width: 300
-                    });
-                    
-                    console.log('Botón de Google renderizado correctamente');
-                } catch (error) {
-                    console.error('Error renderizando botón de Google:', error);
-                    
-                    // Fallback: mostrar botón manual
-                    buttonContainer.innerHTML = `
-                        <button onclick="manualGoogleSignIn()" style="
-                            background: #4285f4; 
-                            color: white; 
-                            border: none; 
-                            padding: 12px 24px; 
-                            border-radius: 4px; 
-                            font-size: 16px; 
-                            cursor: pointer;
-                        ">
-                            Iniciar Sesión con Google
-                        </button>
-                    `;
-                }
-            } else {
-                console.error('Google APIs no disponibles o contenedor no encontrado');
-                
-                // Mostrar mensaje de error
-                const buttonContainer = document.getElementById('google-button-container');
-                if (buttonContainer) {
-                    buttonContainer.innerHTML = `
-                        <p style="color: red;">Error: Google Sign-In no disponible</p>
-                        <button onclick="location.reload()" style="
-                            background: #dc3545; 
-                            color: white; 
-                            border: none; 
-                            padding: 10px 20px; 
-                            border-radius: 4px;
-                        ">
-                            Recargar página
-                        </button>
-                    `;
-                }
-            }
-        }, 300); // Aumentar tiempo de espera
+        console.log('Botón de Google renderizado exitosamente');
+        
+    } catch (error) {
+        console.error('Error renderizando botón oficial:', error);
+        showFallbackButton(container);
     }
 }
-function manualGoogleSignIn() {
+
+function showFallbackButton(container) {
+    container.innerHTML = `
+        <div style="text-align: center;">
+            <button onclick="fallbackAuth()" style="
+                background: #4285f4;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 6px;
+                font-size: 16px;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            ">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                </svg>
+                Continuar con Google
+            </button>
+            <p style="font-size: 12px; color: #666; margin-top: 8px;">
+                Si no funciona, recargue la página
+            </p>
+        </div>
+    `;
+}
+
+function fallbackAuth() {
     try {
-        if (typeof google !== 'undefined' && google.accounts) {
+        if (googleInitialized && google.accounts && google.accounts.id) {
             google.accounts.id.prompt((notification) => {
-                console.log('Prompt result:', notification);
+                console.log('Resultado del prompt:', notification);
             });
         } else {
-            alert('Google Sign-In no está disponible. Recargue la página.');
+            alert('Sistema de autenticación no disponible. Recargue la página.');
         }
     } catch (error) {
-        console.error('Error en sign-in manual:', error);
+        console.error('Error en autenticación de respaldo:', error);
         alert('Error de autenticación. Recargue la página.');
     }
 }
