@@ -283,7 +283,7 @@ async function handleGenerateReport(e) {
 
 async function fetchRealSheetData(fechaDesde, fechaHasta, filtroEstudiante, filtroModalidad) {
     // IMPORTANTE: Reemplaza con tu URL de Google Apps Script para reportes
-    const REPORTS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzQkfQBBdzT50JSxQmRytAvIW1p5LecrQAg9SJ2seV4XYZqAcrPZAoKKAIZVtz7ag0/exec';
+    const REPORTS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxQm8YYxWr1rQwCooM-JfIzG30XZoSnhkjuqpD7Z_luO4vGJGS2za50pYquPju5z5g/exec';
     
     const requestData = {
         action: 'get_report_data',
