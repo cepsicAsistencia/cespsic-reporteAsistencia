@@ -8,7 +8,7 @@ const GOOGLE_CLIENT_ID = '799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.goo
 const SHEET_ID = '146Q1MG0AUCnzacqrN5kBENRuiql8o07Uts-l_gimL2I';
 
 // IMPORTANTE: Reemplaza esta URL con la URL de tu Google Apps Script desplegado
-const REPORTS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby2BqVqZes0nYEh5CfxNlL3mTWzasOSAcZ_BNPTwFjZt-l3qT1DJc2dl-zY_8D5LG4/exec';
+const REPORTS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxfEp-ercOI64jKOlRPVttGras54mK26bCqbRR1gX4OuXOtsxqHrtoCC5on8QrFQUs/exec';
 
 const AUTHORIZED_EMAILS = [
     'jose.lino.flores.madrigal@gmail.com',
