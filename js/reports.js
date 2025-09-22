@@ -57,7 +57,7 @@ function setupEventListeners() {
         fechaHastaInput.addEventListener('change', validateDates);
     }
     if (reportsForm) {
-        reportsForm.addEventListener('submit', handleGenerateReport);
+        reportsForm.addEventListener('submit', GenerateReport);
     }
 }
 
@@ -93,7 +93,7 @@ function initializeGoogleSignIn() {
     try {
         google.accounts.id.initialize({
             client_id: GOOGLE_CLIENT_ID,
-            callback: handleCredentialResponse,
+            callback: CredentialResponse,
             auto_select: false,
             cancel_on_tap_outside: true
         });
@@ -141,6 +141,8 @@ function closeAuthModal() {
 function handleCredentialResponse(response) {
     try {
         console.log('Procesando credenciales de Google...');
+        console.log('URL configurada:', REPORTS_SCRIPT_URL);
+        alert('URL que se usará: ' + REPORTS_SCRIPT_URL);        
         closeAuthModal();
         
         const userInfo = parseJwt(response.credential);
