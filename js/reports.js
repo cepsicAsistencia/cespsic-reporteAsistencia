@@ -302,6 +302,8 @@ function handleGenerateReport(e) {
 
 function generateTestPDF(fechaDesde, fechaHasta) {
     try {
+        showStatus('Generando reporte HTML...', 'loading');
+        
         // Crear contenido HTML para convertir a PDF
         const reportContent = generateReportHTML(fechaDesde, fechaHasta);
         
@@ -309,7 +311,7 @@ function generateTestPDF(fechaDesde, fechaHasta) {
         const blob = new Blob([reportContent], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
         
-        // Abrir en nueva ventana para que el usuario pueda guardar como PDF
+        // Abrir en nueva ventana
         const newWindow = window.open(url, '_blank');
         
         if (newWindow) {
@@ -322,9 +324,10 @@ function generateTestPDF(fechaDesde, fechaHasta) {
                 fechaGeneracion: new Date().toLocaleString('es-ES')
             };
             
+            showStatus('Reporte generado exitosamente', 'success');
             showDownloadModal();
         } else {
-            showStatus('No se pudo abrir ventana. Verifique que no esté bloqueada.', 'error');
+            showStatus('No se pudo abrir ventana. Verifique que no esté bloqueada por el navegador.', 'error');
         }
         
     } catch (error) {
@@ -332,6 +335,7 @@ function generateTestPDF(fechaDesde, fechaHasta) {
         showStatus('Error al generar reporte: ' + error.message, 'error');
     }
 }
+
 function generateReportHTML(fechaDesde, fechaHasta) {
     return `
 <!DOCTYPE html>
