@@ -394,6 +394,31 @@ async function handleGenerateReport(e) {
 
 // Función para obtener datos reales del Google Sheet
 async function fetchRealSheetData(fechaDesde, fechaHasta, filtroEstudiante, filtroModalidad) {
+    console.log('Probando conexión con:', REPORTS_SCRIPT_URL);
+    
+    try {
+        const response = await fetch(REPORTS_SCRIPT_URL, {
+            method: 'GET'  // Prueba GET primero
+        });
+        
+        console.log('Respuesta GET:', response.status);
+        const text = await response.text();
+        console.log('Contenido:', text.substring(0, 100));
+        
+        if (text.includes('CESPSIC')) {
+            alert('Conexión exitosa con GET');
+        } else {
+            alert('Respuesta inesperada: ' + text.substring(0, 50));
+        }
+        
+        throw new Error('Prueba de conexión completada');
+        
+    } catch (error) {
+        console.error('Error en prueba:', error);
+        throw error;
+    }
+}
+async function fetchRealSheetDatax(fechaDesde, fechaHasta, filtroEstudiante, filtroModalidad) {
     console.log('Preparando solicitud al backend...');
     
     const requestData = {
