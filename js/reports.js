@@ -23,7 +23,11 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('Iniciando aplicación de reportes CESPSIC');
     initializeForm();
     setupEventListeners();
-    loadGoogleSignInScript();
+    
+    // Esperar un poco antes de cargar Google APIs
+    setTimeout(() => {
+        loadGoogleSignInScript();
+    }, 1000);
 });
 
 function initializeForm() {
