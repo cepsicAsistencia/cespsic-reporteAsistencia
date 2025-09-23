@@ -181,116 +181,6 @@ h2 {
     border: none;
     padding: 12px 24px;
     border-radius: 8px;
-    font-size: 16px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    text-decoration: none;
-    margin: 10px 5px;
-    width: auto;
-    min-width: 200px;
-    justify-content: center;
-}
-
-.google-signin-btn:hover {
-    background: #3367d6;
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(66, 133, 244, 0.3);
-}
-
-/* Forzar centrado del contenedor de Google Sign-In */
-.auth-section {
-    background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
-    border: 2px solid #64b5f6;
-    border-radius: 15px;
-    padding: 25px;
-    margin-bottom: 25px;
-    text-align: center;
-}
-
-.auth-section.authenticated {
-    background: linear-gradient(135deg, #e8f5e8 0%, #f1f8e9 100%);
-    border-color: #4caf50;
-}
-
-/* Asegurar que todo dentro del contenedor esté centrado */
-#signin-button-container > * {
-    margin: 0 auto;
-}
-
-/* Estilos específicos para el iframe de Google */
-#signin-button-container iframe {
-    display: block !important;
-    margin: 0 auto !important;
-}
-
-.signout-btn {
-    background: #dc3545;
-    font-size: 14px;
-    padding: 8px 16px;
-}
-
-.signout-btn:hover {
-    background: #c82333;
-}
-
-.auth-warning {
-    background: #fff3cd;
-    border: 1px solid #ffeaa7;
-    border-radius: 8px;
-    padding: 12px;
-    margin: 15px 0;
-    color: #856404;
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.auth-info {
-    transition: all 0.3s ease;
-}
-
-.auth-info:hover {
-    background: #d4edda;
-}
-
-/* Overlay para formulario deshabilitado */
-.form-overlay {
-    position: relative;
-}
-
-.form-overlay::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(255, 255, 255, 0.8);
-    z-index: 10;
-    border-radius: 15px;
-}
-
-.form-overlay.authenticated::before {
-    display: none;
-}
-
-/* Formulario */
-.form-section {
-    margin-bottom: 25px;
-}
-
-.form-description {
-    color: #666;
-    font-size: 1em;
-    margin-top: 10px;
-    padding: 15px;
-    background: #f8f9fa;
-    border-radius: 8px;
     border-left: 4px solid #667eea;
 }
 
@@ -372,6 +262,74 @@ input:disabled {
 
 .checkbox-item input[type="checkbox"]:disabled {
     opacity: 0.6;
+}
+
+/* Estilos especiales para el checkbox de evidencias */
+.checkbox-evidencias {
+    background: linear-gradient(135deg, #fff3e0 0%, #fce4ec 100%) !important;
+    border: 2px solid #ff9800 !important;
+    position: relative;
+    overflow: hidden;
+}
+
+.checkbox-evidencias::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(45deg, #ff9800, #e91e63, #ff9800, #e91e63);
+    background-size: 400% 400%;
+    animation: gradientShift 3s ease infinite;
+    z-index: -1;
+    border-radius: 8px;
+}
+
+@keyframes gradientShift {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+.checkbox-evidencias:hover {
+    background: linear-gradient(135deg, #fff8e1 0%, #fdf2f8 100%) !important;
+    border-color: #f57c00 !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+}
+
+.checkbox-evidencias label {
+    font-weight: 600;
+    color: #e65100;
+}
+
+.checkbox-evidencias input[type="checkbox"] {
+    transform: scale(1.4);
+    accent-color: #ff9800;
+}
+
+.checkbox-evidencias small {
+    display: block;
+    font-weight: normal;
+    color: #bf360c !important;
+    font-style: italic;
+    margin-top: 5px;
+}
+
+/* Estado activo del checkbox evidencias */
+.checkbox-evidencias.active {
+    background: linear-gradient(135deg, #e8f5e8 0%, #f1f8e9 100%) !important;
+    border: 2px solid #4caf50 !important;
+    box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.checkbox-evidencias.active::before {
+    background: linear-gradient(45deg, #4caf50, #8bc34a, #4caf50, #8bc34a);
+}
+
+.checkbox-evidencias.active label {
+    color: #2e7d32;
 }
 
 .submit-btn {
@@ -641,4 +599,115 @@ input:disabled {
         max-width: 70%;
         min-width: 80px;
     }
+};
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    margin: 10px 5px;
+    width: auto;
+    min-width: 200px;
+    justify-content: center;
 }
+
+.google-signin-btn:hover {
+    background: #3367d6;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(66, 133, 244, 0.3);
+}
+
+/* Forzar centrado del contenedor de Google Sign-In */
+.auth-section {
+    background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+    border: 2px solid #64b5f6;
+    border-radius: 15px;
+    padding: 25px;
+    margin-bottom: 25px;
+    text-align: center;
+}
+
+.auth-section.authenticated {
+    background: linear-gradient(135deg, #e8f5e8 0%, #f1f8e9 100%);
+    border-color: #4caf50;
+}
+
+/* Asegurar que todo dentro del contenedor esté centrado */
+#signin-button-container > * {
+    margin: 0 auto;
+}
+
+/* Estilos específicos para el iframe de Google */
+#signin-button-container iframe {
+    display: block !important;
+    margin: 0 auto !important;
+}
+
+.signout-btn {
+    background: #dc3545;
+    font-size: 14px;
+    padding: 8px 16px;
+}
+
+.signout-btn:hover {
+    background: #c82333;
+}
+
+.auth-warning {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 8px;
+    padding: 12px;
+    margin: 15px 0;
+    color: #856404;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.auth-info {
+    transition: all 0.3s ease;
+}
+
+.auth-info:hover {
+    background: #d4edda;
+}
+
+/* Overlay para formulario deshabilitado */
+.form-overlay {
+    position: relative;
+}
+
+.form-overlay::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.8);
+    z-index: 10;
+    border-radius: 15px;
+}
+
+.form-overlay.authenticated::before {
+    display: none;
+}
+
+/* Formulario */
+.form-section {
+    margin-bottom: 25px;
+}
+
+.form-description {
+    color: #666;
+    font-size: 1em;
+    margin-top: 10px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px
+Claude
