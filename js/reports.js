@@ -9,7 +9,7 @@ const GOOGLE_CLIENT_ID = '799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.goo
 const SHEET_ID = '146Q1MG0AUCnzacqrN5kBENRuiql8o07Uts-l_gimL2I';
 
 // URL del Google Apps Script deployment
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxXj1s751aX_qZzcqO_CBZmPD9muOBC3-DqxSiOM9LODnqhwXXUHN3JfK7moVQTdh0/exec';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz_XQGB0aalHun_yaZwEwbZwOU-80KDXouSwXsbvV-rdq7UnDwQZ9bVVwYuuu8lQ78/exec';
 
 // Usuarios autorizados para generar reportes
 const AUTHORIZED_USERS = [
@@ -479,6 +479,83 @@ function setupEventListeners() {
     document.getElementById('fecha_desde').addEventListener('change', validateDates);
     document.getElementById('fecha_hasta').addEventListener('change', validateDates);
     document.getElementById('reportForm').addEventListener('submit', handleFormSubmit);
+    
+    // Agregar listeners para el comportamiento de checkboxes
+    setupCheckboxListeners();
+}
+
+function setupCheckboxListeners() {
+    // Listener para cuando se marcan otros checkboxes (desmarcar evidencias_solo)
+    const otherCheckboxes = [
+        'incluir_intervenciones', 
+        'incluir_actividades', 
+        'incluir_evidencias', 
+        'incluir_comentarios', 
+        'incluir_permisos'
+    ];
+    
+    otherCheckboxes.forEach(id => {
+        const checkbox = document.getElementById(id);
+        if (checkbox) {
+            checkbox.addEventListener('change', function() {
+                if (this.checked) {
+                    // Si se marca cualquier otro checkbox, desmarcar evidencias_solo
+                    const evidenciasSolo = document.getElementById('incluir_evidencias_solo');
+                    if (evidenciasSolo.checked) {
+                        evidenciasSolo.checked = false;
+                        updateCheckboxStyles();
+                    }
+                }
+            });
+        }
+    });
+}
+
+function handleEvidenciasChange(checkbox) {
+    const isChecked = checkbox.checked;
+    
+    // Lista de checkboxes que se deben desmarcar cuando se marca "Solo Evidencias"
+    const otherCheckboxes = [
+        'incluir_intervenciones', 
+        'incluir_actividades', 
+        'incluir_evidencias', 
+        'incluir_comentarios', 
+        'incluir_permisos'
+    ];
+    
+    if (isChecked) {
+        // Desmarcar todos los otros checkboxes
+        otherCheckboxes.forEach(id => {
+            const cb = document.getElementById(id);
+            if (cb) {
+                cb.checked = false;
+            }
+        });
+        
+        // Mostrar mensaje informativo
+        showStatus('Modo "Solo Evidencias" activado. Se incluirán únicamente los links a documentos de la columna AI.', 'loading');
+        setTimeout(() => hideStatus(), 4000);
+    }
+    
+    updateCheckboxStyles();
+}
+
+// Hacer la función disponible globalmente para el HTML
+window.handleEvidenciasChange = handleEvidenciasChange;
+
+function updateCheckboxStyles() {
+    const evidenciasSolo = document.getElementById('incluir_evidencias_solo');
+    const evidenciasItem = document.querySelector('.checkbox-evidencias');
+    
+    if (evidenciasSolo.checked) {
+        evidenciasItem.style.background = '#e8f5e8';
+        evidenciasItem.style.borderColor = '#4caf50';
+        evidenciasItem.style.boxShadow = '0 2px 8px rgba(76, 175, 80, 0.2)';
+    } else {
+        evidenciasItem.style.background = '';
+        evidenciasItem.style.borderColor = '';
+        evidenciasItem.style.boxShadow = '';
+    }
 }
 
 function validateDates() {
@@ -639,6 +716,7 @@ function generateSampleData(fechaDesde, fechaHasta) {
             familia: String(Math.floor(Math.random() * 2)),
             actividades_realizadas: 'Entrevista psicológica, Sesiones terapéuticas',
             total_evidencias: String(Math.floor(Math.random() * 4)),
+            links_evidencias: `https://drive.google.com/file/d/ejemplo${i+1}_documento/view, https://drive.google.com/file/d/ejemplo${i+1}_evidencia/view`,
             comentarios_adicionales: `Registro de ejemplo ${i + 1} - Datos de demostración`,
             actividades_varias_detalle: '',
             pruebas_psicologicas_detalle: 'MMPI-2, WAIS-IV',
@@ -727,20 +805,26 @@ function getTableHeaders() {
     const incluirCampos = getSelectedFields();
     const headers = ['Nombre Completo', 'Tipo Estudiante', 'Modalidad', 'Fecha', 'Hora', 'Tipo Registro'];
     
-    if (incluirCampos.includes('intervenciones')) {
-        headers.push('Intervenciones', 'Niños', 'Adolescentes', 'Adultos', 'Mayores 60', 'Familia');
-    }
-    if (incluirCampos.includes('actividades')) {
-        headers.push('Actividades');
-    }
-    if (incluirCampos.includes('evidencias')) {
-        headers.push('Evidencias');
-    }
-    if (incluirCampos.includes('comentarios')) {
-        headers.push('Comentarios');
-    }
-    if (incluirCampos.includes('permisos')) {
-        headers.push('Detalle Permiso', 'Detalle Otro');
+    if (incluirCampos.includes('evidencias_solo')) {
+        // Solo evidencias: agregar columna de links
+        headers.push('Links a Evidencias');
+    } else {
+        // Modo normal: agregar campos según selección
+        if (incluirCampos.includes('intervenciones')) {
+            headers.push('Intervenciones', 'Niños', 'Adolescentes', 'Adultos', 'Mayores 60', 'Familia');
+        }
+        if (incluirCampos.includes('actividades')) {
+            headers.push('Actividades');
+        }
+        if (incluirCampos.includes('evidencias')) {
+            headers.push('Total Evidencias');
+        }
+        if (incluirCampos.includes('comentarios')) {
+            headers.push('Comentarios');
+        }
+        if (incluirCampos.includes('permisos')) {
+            headers.push('Detalle Permiso', 'Detalle Otro');
+        }
     }
     
     return headers;
@@ -761,41 +845,47 @@ function prepareTableData() {
             record.tipo_registro || ''
         ];
         
-        if (incluirCampos.includes('intervenciones')) {
-            row.push(
-                record.intervenciones_psicologicas || '0',
-                record.ninos_ninas || '0',
-                record.adolescentes || '0',
-                record.adultos || '0',
-                record.mayores_60 || '0',
-                record.familia || '0'
-            );
-        }
-        
-        if (incluirCampos.includes('actividades')) {
-            let actividades = record.actividades_realizadas || '';
-            if (record.actividades_varias_detalle) {
-                actividades += (actividades ? ' | ' : '') + record.actividades_varias_detalle;
+        if (incluirCampos.includes('evidencias_solo')) {
+            // Solo evidencias: agregar links de documentos
+            row.push(record.links_evidencias || 'Sin evidencias');
+        } else {
+            // Modo normal: agregar campos según selección
+            if (incluirCampos.includes('intervenciones')) {
+                row.push(
+                    record.intervenciones_psicologicas || '0',
+                    record.ninos_ninas || '0',
+                    record.adolescentes || '0',
+                    record.adultos || '0',
+                    record.mayores_60 || '0',
+                    record.familia || '0'
+                );
             }
-            if (record.pruebas_psicologicas_detalle) {
-                actividades += (actividades ? ' | ' : '') + record.pruebas_psicologicas_detalle;
+            
+            if (incluirCampos.includes('actividades')) {
+                let actividades = record.actividades_realizadas || '';
+                if (record.actividades_varias_detalle) {
+                    actividades += (actividades ? ' | ' : '') + record.actividades_varias_detalle;
+                }
+                if (record.pruebas_psicologicas_detalle) {
+                    actividades += (actividades ? ' | ' : '') + record.pruebas_psicologicas_detalle;
+                }
+                row.push(actividades);
             }
-            row.push(actividades);
-        }
-        
-        if (incluirCampos.includes('evidencias')) {
-            row.push(record.total_evidencias || '0');
-        }
-        
-        if (incluirCampos.includes('comentarios')) {
-            row.push(record.comentarios_adicionales || '');
-        }
-        
-        if (incluirCampos.includes('permisos')) {
-            row.push(
-                record.permiso_detalle || '',
-                record.otro_detalle || ''
-            );
+            
+            if (incluirCampos.includes('evidencias')) {
+                row.push(record.total_evidencias || '0');
+            }
+            
+            if (incluirCampos.includes('comentarios')) {
+                row.push(record.comentarios_adicionales || '');
+            }
+            
+            if (incluirCampos.includes('permisos')) {
+                row.push(
+                    record.permiso_detalle || '',
+                    record.otro_detalle || ''
+                );
+            }
         }
         
         return row;
@@ -871,3 +961,4 @@ function hideStatus() {
     const status = document.getElementById('status');
     status.style.display = 'none';
 }
+Claude
