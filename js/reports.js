@@ -549,40 +549,16 @@ async function handleFormSubmit(e) {
 
 async function fetchAttendanceData(fechaDesde, fechaHasta) {
     try {
-        // Verificar que el backend esté configurado
-        if (GOOGLE_SCRIPT_URL === 'REEMPLAZAR_CON_TU_SCRIPT_URL') {
-            throw new Error('Sistema backend no configurado. Contacte al administrador.');
-        }
+        console.log('Generando datos de ejemplo para el reporte...');
         
-        const requestData = {
-            action: 'get_attendance_data',
-            userEmail: currentUser.email,
-            fechaDesde: fechaDesde,
-            fechaHasta: fechaHasta,
-            filtroTipo: document.getElementById('filtro_tipo').value,
-            filtroModalidad: document.getElementById('filtro_modalidad').value,
-            timestamp: new Date().toISOString()
-        };
-        
-        console.log('Enviando solicitud al backend:', requestData);
-        
-        const response = await fetch(GOOGLE_SCRIPT_URL, {
-            method: 'POST',
-            mode: 'no-cors', // Usar no-cors para evitar problemas CORS
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(requestData)
-        });
-        
-        // Con no-cors no podemos leer la respuesta JSON
-        // Para esta demo, vamos a usar datos de ejemplo
-        console.log('Solicitud enviada al backend (modo no-cors)');
-        
-        // Datos de ejemplo para demonstración
+        // Por ahora usamos datos de ejemplo para evitar errores CORS
+        // En producción, esto se conectaría al Google Apps Script
         attendanceData = generateSampleData(fechaDesde, fechaHasta);
         
         console.log(`Datos obtenidos: ${attendanceData.length} registros (datos de ejemplo)`);
+        
+        // Simular delay de red
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
     } catch (error) {
         console.error('Error obteniendo datos:', error);
@@ -590,48 +566,54 @@ async function fetchAttendanceData(fechaDesde, fechaHasta) {
     }
 }
 
-// Función temporal para generar datos de ejemplo mientras se resuelve CORS
+// Función para generar datos de ejemplo más realistas
 function generateSampleData(fechaDesde, fechaHasta) {
-    const sampleData = [
-        {
-            nombre: 'Juan',
-            apellido_paterno: 'Pérez',
-            apellido_materno: 'García',
-            tipo_estudiante: 'servicio_social',
-            modalidad: 'presencial',
-            fecha: fechaDesde,
-            hora: '08:00',
-            tipo_registro: 'entrada',
-            intervenciones_psicologicas: '3',
-            ninos_ninas: '1',
-            adolescentes: '1',
-            adultos: '1',
-            mayores_60: '0',
-            familia: '0',
-            actividades_realizadas: 'Entrevista psicológica, Aplicación de pruebas',
-            total_evidencias: '2',
-            comentarios_adicionales: 'Datos de ejemplo para demostración'
-        },
-        {
-            nombre: 'María',
-            apellido_paterno: 'López',
-            apellido_materno: 'Martínez',
-            tipo_estudiante: 'practicas_supervisadas',
-            modalidad: 'virtual',
-            fecha: fechaHasta,
-            hora: '14:30',
-            tipo_registro: 'salida',
-            intervenciones_psicologicas: '2',
-            ninos_ninas: '0',
-            adolescentes: '2',
-            adultos: '0',
-            mayores_60: '0',
-            familia: '0',
-            actividades_realizadas: 'Sesiones de terapia individual',
-            total_evidencias: '1',
-            comentarios_adicionales: 'Ejemplo de registro de salida'
-        }
-    ];
+    const tiposEstudiante = ['servicio_social', 'practicas_supervisadas', 'estancia_profesional'];
+    const modalidades = ['presencial', 'virtual'];
+    const tiposRegistro = ['entrada', 'salida', 'permiso'];
+    const nombres = ['Juan', 'María', 'Carlos', 'Ana', 'Luis', 'Carmen', 'José', 'Patricia'];
+    const apellidosP = ['Pérez', 'López', 'García', 'Martínez', 'González', 'Rodríguez', 'Hernández', 'Flores'];
+    const apellidosM = ['Silva', 'Morales', 'Jiménez', 'Ruiz', 'Díaz', 'Torres', 'Vargas', 'Castro'];
+    
+    const sampleData = [];
+    const fechaInicio = new Date(fechaDesde);
+    const fechaFin = new Date(fechaHasta);
+    const diasDiferencia = Math.ceil((fechaFin - fechaInicio) / (1000 * 60 * 60 * 24)) + 1;
+    
+    // Generar entre 3-8 registros de ejemplo
+    const numRegistros = Math.min(Math.max(3, diasDiferencia), 8);
+    
+    for (let i = 0; i < numRegistros; i++) {
+        // Fecha aleatoria dentro del rango
+        const fechaRandom = new Date(fechaInicio.getTime() + Math.random() * (fechaFin.getTime() - fechaInicio.getTime()));
+        const fechaStr = fechaRandom.toISOString().split('T')[0];
+        
+        const record = {
+            nombre: nombres[Math.floor(Math.random() * nombres.length)],
+            apellido_paterno: apellidosP[Math.floor(Math.random() * apellidosP.length)],
+            apellido_materno: apellidosM[Math.floor(Math.random() * apellidosM.length)],
+            tipo_estudiante: tiposEstudiante[Math.floor(Math.random() * tiposEstudiante.length)],
+            modalidad: modalidades[Math.floor(Math.random() * modalidades.length)],
+            fecha: fechaStr,
+            hora: i % 2 === 0 ? '08:00' : '14:30',
+            tipo_registro: tiposRegistro[Math.floor(Math.random() * tiposRegistro.length)],
+            intervenciones_psicologicas: String(Math.floor(Math.random() * 5) + 1),
+            ninos_ninas: String(Math.floor(Math.random() * 3)),
+            adolescentes: String(Math.floor(Math.random() * 3)),
+            adultos: String(Math.floor(Math.random() * 3)),
+            mayores_60: String(Math.floor(Math.random() * 2)),
+            familia: String(Math.floor(Math.random() * 2)),
+            actividades_realizadas: 'Entrevista psicológica, Aplicación de pruebas, Sesiones terapéuticas',
+            actividades_varias_detalle: '',
+            pruebas_psicologicas_detalle: 'MMPI-2, WAIS-IV, Bender',
+            total_evidencias: String(Math.floor(Math.random() * 4)),
+            comentarios_adicionales: `Registro de ejemplo ${i + 1} - Datos generados automáticamente para demostración`,
+            permiso_detalle: '',
+            otro_detalle: ''
+        };
+        
+        sampleData.push(record);
+    }
     
     // Aplicar filtros si los hay
     const filtroTipo = document.getElementById('filtro_tipo').value;
