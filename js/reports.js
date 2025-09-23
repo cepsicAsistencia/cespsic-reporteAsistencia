@@ -796,7 +796,7 @@ async function generatePDF(fechaDesde, fechaHasta) {
     const isModoEvidencias = incluirCampos.includes('evidencias_solo');
     
     if (isModoEvidencias) {
-        // Configuración especial para modo evidencias con links
+        // Configuración especial para modo evidencias con links en la columna
         const headers = getTableHeaders();
         const processedData = [];
         
@@ -804,14 +804,14 @@ async function generatePDF(fechaDesde, fechaHasta) {
             const newRow = [...row];
             // La columna de evidencias está en la posición 6
             if (row[6] && typeof row[6] === 'object' && row[6].links) {
-                // Solo mostrar los links directamente, sin texto adicional
+                // Mostrar solo los links separados por líneas
                 const linksText = row[6].links.map(link => link.url).join('\n');
                 newRow[6] = linksText;
             }
             processedData.push(newRow);
         });
         
-        // Crear tabla normal primero
+        // Crear tabla con links en la columna
         doc.autoTable({
             head: [headers],
             body: processedData,
@@ -829,57 +829,31 @@ async function generatePDF(fechaDesde, fechaHasta) {
                 fillColor: [248, 249, 250]
             },
             columnStyles: {
-                6: { cellWidth: 50 }
-            }
-        });
-        
-        // Agregar links clickeables después de la tabla
-        let currentY = doc.lastAutoTable.finalY + 10;
-        
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Enlaces a Evidencias:', 10, currentY);
-        currentY += 8;
-        
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        
-        tableData.forEach((row, rowIndex) => {
-            if (row[6] && typeof row[6] === 'object' && row[6].links && row[6].links.length > 0) {
-                const nombreCompleto = row[0];
-                const fecha = row[3];
-                
-                doc.setFont('helvetica', 'bold');
-                doc.text(`${nombreCompleto} (${fecha}):`, 10, currentY);
-                currentY += 5;
-                
-                doc.setFont('helvetica', 'normal');
-                
-                row[6].links.forEach((link, linkIndex) => {
-                    const linkText = `  [${linkIndex + 1}] ${link.text || `Evidencia ${linkIndex + 1}`}`;
-                    
-                    // Agregar texto del link
-                    doc.setTextColor(0, 0, 255);
-                    doc.text(linkText, 15, currentY);
-                    
-                    // Crear área clickeable
-                    const textWidth = doc.getTextWidth(linkText);
-                    doc.link(15, currentY - 3, textWidth, 4, { url: link.url });
-                    
-                    currentY += 4;
-                    
-                    // Verificar si necesitamos nueva página
-                    if (currentY > 190) {
-                        doc.addPage();
-                        currentY = 20;
+                6: { cellWidth: 70 } // Columna de evidencias más ancha
+            },
+            didDrawCell: function(data) {
+                // Hacer clickeables los links en la columna de evidencias
+                if (data.column.index === 6 && data.section === 'body') {
+                    const cellText = data.cell.text;
+                    if (cellText && cellText.length > 0) {
+                        cellText.forEach((line, lineIndex) => {
+                            const text = line.trim();
+                            if (text.startsWith('https://')) {
+                                // Crear área clickeable para cada link
+                                const linkY = data.cell.y + (lineIndex * 3) + 3;
+                                doc.link(
+                                    data.cell.x + 2,
+                                    linkY - 1,
+                                    data.cell.width - 4,
+                                    3,
+                                    { url: text }
+                                );
+                            }
+                        });
                     }
-                });
-                
-                currentY += 3; // Espacio entre registros
+                }
             }
         });
-        
-        doc.setTextColor(0, 0, 0); // Restaurar color negro
         
     } else {
         // Modo normal sin links especiales
