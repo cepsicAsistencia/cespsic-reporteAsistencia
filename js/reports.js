@@ -9,7 +9,7 @@ const GOOGLE_CLIENT_ID = '799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.goo
 const SHEET_ID = '146Q1MG0AUCnzacqrN5kBENRuiql8o07Uts-l_gimL2I';
 
 // IMPORTANTE: URL del Google Apps Script deployment
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzhkh8KZSA3BWEi01lgC6Bpwm2Gyfufy5_npN9N2ajY_u5-h6T180TsS0jI7M5l_h0/exec';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzWGVu6YAKoUjaht6yFTqBL3uBOvg0ufg_TkmAT8R-JZ7cONZ-A3OXjVLbJ22fXzv0/exec';
 
 // Usuarios autorizados para generar reportes
 const AUTHORIZED_USERS = [
@@ -597,56 +597,94 @@ async function handleFormSubmit(e) {
 
 // ========== GOOGLE SHEETS DATA FETCHING ==========
 
-// ========== DATA FETCHING - DATOS REALES ==========
+// ========== DATA FETCHING - USANDO GOOGLE APPS SCRIPT ==========
 
 async function fetchAttendanceData(fechaDesde, fechaHasta) {
-    console.log('=== OBTENIENDO DATOS REALES DEL GOOGLE SHEET ===');
-    console.log('Sheet ID:', SHEET_ID);
+    console.log('=== OBTENIENDO DATOS REALES VIA GOOGLE APPS SCRIPT ===');
+    console.log('Script URL:', GOOGLE_SCRIPT_URL);
     console.log('Rango de fechas:', fechaDesde, 'al', fechaHasta);
     
     try {
-        // Construir URL para obtener CSV del Google Sheet
-        const csvUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`;
-        console.log('URL del CSV:', csvUrl);
+        const requestData = {
+            action: 'get_attendance_data',
+            userEmail: currentUser.email,
+            fechaDesde: fechaDesde,
+            fechaHasta: fechaHasta,
+            filtroTipo: document.getElementById('filtro_tipo').value,
+            filtroModalidad: document.getElementById('filtro_modalidad').value,
+            timestamp: new Date().toISOString()
+        };
         
-        console.log('Iniciando solicitud al Google Sheet...');
-        const response = await fetch(csvUrl);
+        console.log('Datos de solicitud:', requestData);
+        console.log('Enviando solicitud al Google Apps Script...');
         
-        console.log('Respuesta recibida:', response.status, response.statusText);
+        // Usar JSONP para evitar problemas de CORS
+        const response = await fetchWithJSONP(GOOGLE_SCRIPT_URL, requestData);
         
-        if (!response.ok) {
-            throw new Error(`Error accediendo al Google Sheet: ${response.status} - ${response.statusText}`);
-        }
-        
-        const csvText = await response.text();
-        console.log('Datos CSV obtenidos, tamaño:', csvText.length, 'caracteres');
-        console.log('Primeros 200 caracteres:', csvText.substring(0, 200));
-        
-        // Procesar CSV y filtrar por fechas
-        attendanceData = processCSVData(csvText, fechaDesde, fechaHasta);
-        
-        console.log(`✅ DATOS REALES PROCESADOS: ${attendanceData.length} registros encontrados`);
-        
-        if (attendanceData.length === 0) {
-            console.warn('No se encontraron registros en el rango de fechas. Usando datos de ejemplo como respaldo.');
-            attendanceData = generateSampleData(fechaDesde, fechaHasta);
-            console.log(`Datos de ejemplo generados: ${attendanceData.length} registros`);
+        if (response && response.success && response.data) {
+            attendanceData = response.data;
+            console.log(`✅ DATOS REALES OBTENIDOS: ${attendanceData.length} registros`);
+            
+            if (attendanceData.length === 0) {
+                console.warn('Google Apps Script devolvió 0 registros. Usando datos de ejemplo.');
+                attendanceData = generateSampleData(fechaDesde, fechaHasta);
+            }
+        } else {
+            throw new Error(response?.message || 'Respuesta inválida del Google Apps Script');
         }
         
     } catch (error) {
-        console.error('❌ ERROR obteniendo datos reales:', error);
+        console.error('❌ ERROR con Google Apps Script:', error);
         console.log('Motivo del error:', error.message);
         
-        // Fallback a datos de ejemplo si falla la conexión
+        // Fallback a datos de ejemplo
         console.log('🔄 Usando datos de ejemplo como respaldo...');
         attendanceData = generateSampleData(fechaDesde, fechaHasta);
         console.log(`Datos de ejemplo generados: ${attendanceData.length} registros`);
         
-        // No lanzar error, usar datos de ejemplo
         if (attendanceData.length === 0) {
             throw new Error('No se pudieron obtener datos: ' + error.message);
         }
     }
+}
+
+// Función JSONP para evitar problemas de CORS
+async function fetchWithJSONP(url, data) {
+    return new Promise((resolve, reject) => {
+        const callbackName = 'jsonp_callback_' + Math.round(100000 * Math.random());
+        
+        // Crear script tag para JSONP
+        const script = document.createElement('script');
+        const params = new URLSearchParams({
+            ...data,
+            callback: callbackName
+        });
+        
+        // Definir callback global
+        window[callbackName] = function(response) {
+            delete window[callbackName];
+            document.head.removeChild(script);
+            resolve(response);
+        };
+        
+        // Timeout para evitar espera infinita
+        setTimeout(() => {
+            if (window[callbackName]) {
+                delete window[callbackName];
+                document.head.removeChild(script);
+                reject(new Error('Timeout: No se recibió respuesta del servidor'));
+            }
+        }, 30000); // 30 segundos timeout
+        
+        script.src = `${url}?${params.toString()}`;
+        script.onerror = () => {
+            delete window[callbackName];
+            document.head.removeChild(script);
+            reject(new Error('Error cargando script del servidor'));
+        };
+        
+        document.head.appendChild(script);
+    });
 }
 
 // Función para procesar datos CSV del Google Sheet
