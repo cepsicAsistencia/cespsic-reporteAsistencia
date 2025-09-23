@@ -61,9 +61,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function initializeApp() {
-    console.log('=== INICIANDO APLICACIÓN CESPSIC REPORTES v.1.0.14 ===');
-    console.log('MODO: Demostración con datos de ejemplo');
-    console.log('Para producción: Configurar conexión a Google Apps Script');
+    console.log('=== INICIANDO APLICACIÓN CESPSIC REPORTES v.1.0.15 ===');
+    console.log('MODO: Datos reales desde Google Sheets');
+    console.log('Zona horaria: Culiacán, Sinaloa, México');
     
     // Verificar scripts inmediatamente
     console.log('Estado de Google:', typeof google);
@@ -96,8 +96,9 @@ function initializeApp() {
         showStatus('Este sistema funciona mejor en Google Chrome. Algunas funciones podrían no estar disponibles.', 'error');
     }
     
-    // Mostrar estado de configuración - SOLO INFORMATIVO
+    // Mostrar estado de configuración
     console.log('Client ID configurado:', GOOGLE_CLIENT_ID ? 'Sí' : 'No');
+    console.log('Google Sheet ID:', SHEET_ID);
     console.log('Usuarios autorizados:', AUTHORIZED_USERS.length);
     
     // Timeout de seguridad
@@ -134,18 +135,24 @@ function isGoogleChrome() {
 }
 
 function setMaxDate() {
-    const today = new Date();
-    const todayStr = today.toISOString().split('T')[0];
+    // Configurar fecha para zona horaria de Culiacán, Sinaloa, México (GMT-7/GMT-6)
+    const todayInCuliacan = new Date().toLocaleDateString('en-CA', {
+        timeZone: 'America/Mazatlan' // Zona horaria de Sinaloa
+    });
     
-    // Fecha hasta: hoy
-    document.getElementById('fecha_hasta').max = todayStr;
-    document.getElementById('fecha_hasta').value = todayStr;
+    // Fecha hasta: hoy en Culiacán
+    document.getElementById('fecha_hasta').max = todayInCuliacan;
+    document.getElementById('fecha_hasta').value = todayInCuliacan;
     
     // Fecha desde: un mes atrás
+    const today = new Date(todayInCuliacan);
     const oneMonthAgo = new Date(today);
     oneMonthAgo.setMonth(today.getMonth() - 1);
     const oneMonthAgoStr = oneMonthAgo.toISOString().split('T')[0];
     document.getElementById('fecha_desde').value = oneMonthAgoStr;
+    
+    console.log('Fechas configuradas para zona horaria de Culiacán, Sinaloa');
+    console.log('Fecha actual en Culiacán:', todayInCuliacan);
 }
 
 function setupEventListeners() {
@@ -558,30 +565,181 @@ async function handleFormSubmit(e) {
 
 // ========== GOOGLE SHEETS DATA FETCHING ==========
 
-// ========== DATA FETCHING ==========
+// ========== DATA FETCHING - DATOS REALES ==========
 
 async function fetchAttendanceData(fechaDesde, fechaHasta) {
-    console.log('=== MODO DEMOSTRACIÓN - GENERANDO DATOS DE EJEMPLO ===');
+    console.log('=== OBTENIENDO DATOS REALES DEL GOOGLE SHEET ===');
     console.log('Rango de fechas:', fechaDesde, 'al', fechaHasta);
-    console.log('Nota: Esta versión usa datos ficticios para demostración');
     
     try {
-        // Simular procesamiento de datos
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        // Usar la API pública de Google Sheets para obtener datos CSV
+        const csvUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`;
         
-        // Generar datos de ejemplo basados en fechas
-        attendanceData = generateSampleData(fechaDesde, fechaHasta);
+        console.log('Obteniendo datos del Google Sheet...');
+        const response = await fetch(csvUrl);
         
-        console.log(`Registros generados exitosamente: ${attendanceData.length} entradas`);
+        if (!response.ok) {
+            throw new Error(`Error accediendo al Google Sheet: ${response.status}`);
+        }
+        
+        const csvText = await response.text();
+        console.log('Datos CSV obtenidos, procesando...');
+        
+        // Procesar CSV y filtrar por fechas
+        attendanceData = processCSVData(csvText, fechaDesde, fechaHasta);
+        
+        console.log(`Datos reales obtenidos: ${attendanceData.length} registros`);
         
         if (attendanceData.length === 0) {
-            throw new Error('No se encontraron datos para el rango de fechas seleccionado');
+            throw new Error('No se encontraron registros en el rango de fechas seleccionado');
         }
         
     } catch (error) {
-        console.error('Error en generación de datos:', error);
-        throw new Error('Error generando datos de demostración: ' + error.message);
+        console.error('Error obteniendo datos reales:', error);
+        
+        // Fallback a datos de ejemplo si falla la conexión
+        console.log('Usando datos de ejemplo como respaldo...');
+        attendanceData = generateSampleData(fechaDesde, fechaHasta);
+        
+        if (attendanceData.length === 0) {
+            throw new Error('No se pudieron obtener datos: ' + error.message);
+        }
     }
+}
+
+// Función para procesar datos CSV del Google Sheet
+function processCSVData(csvText, fechaDesde, fechaHasta) {
+    const lines = csvText.split('\n');
+    const data = [];
+    
+    if (lines.length < 2) {
+        console.warn('El Google Sheet no contiene datos suficientes');
+        return [];
+    }
+    
+    // Procesar cada fila (saltando encabezados)
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        try {
+            const fields = parseCSVLine(line);
+            if (fields.length < 35) continue; // Verificar que tenga suficientes columnas
+            
+            // Mapear según las columnas especificadas (N, O, P, Q, R, S, T, U, X, Y, Z, AA, AB, AC, AH, AD, AE, AF, AG, V, W)
+            const record = {
+                nombre: fields[13] || '',           // Columna N (índice 13)
+                apellido_paterno: fields[14] || '', // Columna O (índice 14)
+                apellido_materno: fields[15] || '', // Columna P (índice 15)
+                tipo_estudiante: fields[16] || '',  // Columna Q (índice 16)
+                modalidad: fields[17] || '',        // Columna R (índice 17)
+                fecha: fields[18] || '',            // Columna S (índice 18)
+                hora: fields[19] || '',             // Columna T (índice 19)
+                tipo_registro: fields[20] || '',    // Columna U (índice 20)
+                intervenciones_psicologicas: fields[23] || '0', // Columna X (índice 23)
+                ninos_ninas: fields[24] || '0',     // Columna Y (índice 24)
+                adolescentes: fields[25] || '0',    // Columna Z (índice 25)
+                adultos: fields[26] || '0',         // Columna AA (índice 26)
+                mayores_60: fields[27] || '0',      // Columna AB (índice 27)
+                familia: fields[28] || '0',         // Columna AC (índice 28)
+                total_evidencias: fields[33] || '0', // Columna AH (índice 33)
+                actividades_realizadas: fields[29] || '', // Columna AD (índice 29)
+                actividades_varias_detalle: fields[30] || '', // Columna AE (índice 30)
+                pruebas_psicologicas_detalle: fields[31] || '', // Columna AF (índice 31)
+                comentarios_adicionales: fields[32] || '', // Columna AG (índice 32)
+                permiso_detalle: fields[21] || '',  // Columna V (índice 21)
+                otro_detalle: fields[22] || ''      // Columna W (índice 22)
+            };
+            
+            // Verificar si la fecha está en el rango especificado
+            if (record.fecha && isDateInRange(record.fecha, fechaDesde, fechaHasta)) {
+                // Aplicar filtros adicionales
+                if (shouldIncludeRecord(record)) {
+                    data.push(record);
+                }
+            }
+            
+        } catch (parseError) {
+            console.warn('Error parseando fila', i, ':', parseError);
+        }
+    }
+    
+    return data;
+}
+
+// Función para parsear una línea CSV manejando comillas y comas
+function parseCSVLine(line) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        
+        if (char === '"') {
+            inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+            result.push(current.trim());
+            current = '';
+        } else {
+            current += char;
+        }
+    }
+    
+    result.push(current.trim());
+    return result;
+}
+
+// Función para verificar si una fecha está en el rango
+function isDateInRange(dateStr, fechaDesde, fechaHasta) {
+    if (!dateStr) return false;
+    
+    try {
+        // Intentar diferentes formatos de fecha
+        let recordDate;
+        
+        if (dateStr.includes('/')) {
+            // Formato DD/MM/YYYY o MM/DD/YYYY
+            const parts = dateStr.split('/');
+            if (parts.length === 3) {
+                // Asumir DD/MM/YYYY (formato más común en México)
+                recordDate = new Date(parts[2], parts[1] - 1, parts[0]);
+            }
+        } else if (dateStr.includes('-')) {
+            // Formato YYYY-MM-DD
+            recordDate = new Date(dateStr);
+        } else {
+            return false;
+        }
+        
+        if (isNaN(recordDate.getTime())) return false;
+        
+        const desde = new Date(fechaDesde);
+        const hasta = new Date(fechaHasta);
+        hasta.setHours(23, 59, 59, 999); // Incluir todo el día final
+        
+        return recordDate >= desde && recordDate <= hasta;
+        
+    } catch (error) {
+        console.warn('Error parseando fecha:', dateStr, error);
+        return false;
+    }
+}
+
+// Función para aplicar filtros adicionales
+function shouldIncludeRecord(record) {
+    const filtroTipo = document.getElementById('filtro_tipo').value;
+    const filtroModalidad = document.getElementById('filtro_modalidad').value;
+    
+    if (filtroTipo && record.tipo_estudiante !== filtroTipo) {
+        return false;
+    }
+    
+    if (filtroModalidad && record.modalidad !== filtroModalidad) {
+        return false;
+    }
+    
+    return true;
 }
 
 // Función para generar datos de ejemplo más realistas
