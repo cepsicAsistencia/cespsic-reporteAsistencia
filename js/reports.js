@@ -533,7 +533,7 @@ function handleEvidenciasChange(checkbox) {
         });
         
         // Mostrar mensaje informativo específico
-        showStatus('Modo "Solo Evidencias" activado. Se filtrarán únicamente registros de SALIDA con links a documentos de la columna AI. Los links serán clickeables en el PDF.', 'loading');
+        showStatus('Modo "Solo Evidencias de Salida" activado. Se filtrarán únicamente registros de SALIDA con links a documentos de la columna AI. Los links serán clickeables en el PDF.', 'loading');
         setTimeout(() => hideStatus(), 6000);
     }
     
@@ -795,81 +795,112 @@ async function generatePDF(fechaDesde, fechaHasta) {
     const incluirCampos = getSelectedFields();
     const isModoEvidencias = incluirCampos.includes('evidencias_solo');
     
-    // Configuración especial para tabla con links
-    const tableConfig = {
-        head: [getTableHeaders()],
-        body: tableData,
-        startY: 40,
-        styles: {
-            fontSize: 8,
-            cellPadding: 2
-        },
-        headStyles: {
-            fillColor: [102, 126, 234],
-            textColor: 255,
-            fontStyle: 'bold'
-        },
-        alternateRowStyles: {
-            fillColor: [248, 249, 250]
-        },
-        columnStyles: {}
-    };
-    
-    // Si es modo evidencias, configurar la columna de links
     if (isModoEvidencias) {
-        tableConfig.columnStyles[6] = { cellWidth: 60 }; // Columna de evidencias más ancha
+        // Configuración especial para modo evidencias con links
+        const headers = getTableHeaders();
+        const processedData = [];
         
-        // Hook personalizado para manejar links
-        tableConfig.didDrawCell = function(data) {
-            if (data.column.index === 6 && data.section === 'body') { // Columna de evidencias
-                const cellData = tableData[data.row.index][6];
-                
-                if (cellData && typeof cellData === 'object' && cellData.links) {
-                    const links = cellData.links;
-                    
-                    // Agregar links clickeables
-                    links.forEach((link, index) => {
-                        const linkY = data.cell.y + (index + 1) * 3 + 2;
-                        
-                        // Agregar el link como texto clickeable
-                        doc.setTextColor(0, 0, 255); // Azul para links
-                        doc.setFont('helvetica', 'underline');
-                        doc.text(link.text, data.cell.x + 2, linkY);
-                        
-                        // Crear área clickeable
-                        doc.link(
-                            data.cell.x + 2, 
-                            linkY - 2, 
-                            doc.getTextWidth(link.text), 
-                            3, 
-                            { url: link.url }
-                        );
-                        
-                        // Restaurar estilo de texto
-                        doc.setTextColor(0, 0, 0);
-                        doc.setFont('helvetica', 'normal');
-                    });
-                    
-                    // No mostrar el texto original en la celda
-                    return false;
-                }
-            }
-        };
-        
-        // Procesar datos para modo evidencias
-        tableConfig.body = tableData.map(row => {
+        tableData.forEach(row => {
             const newRow = [...row];
+            // La columna de evidencias está en la posición 6
             if (row[6] && typeof row[6] === 'object' && row[6].links) {
-                // Reemplazar objeto con texto simple para la tabla
-                newRow[6] = row[6].links.length > 0 ? 
-                    `${row[6].links.length} evidencia(s) - Ver links` : 
-                    'Sin evidencias';
+                // Solo mostrar los links directamente, sin texto adicional
+                const linksText = row[6].links.map(link => link.url).join('\n');
+                newRow[6] = linksText;
             }
-            return newRow;
+            processedData.push(newRow);
+        });
+        
+        // Crear tabla normal primero
+        doc.autoTable({
+            head: [headers],
+            body: processedData,
+            startY: 40,
+            styles: {
+                fontSize: 8,
+                cellPadding: 2
+            },
+            headStyles: {
+                fillColor: [102, 126, 234],
+                textColor: 255,
+                fontStyle: 'bold'
+            },
+            alternateRowStyles: {
+                fillColor: [248, 249, 250]
+            },
+            columnStyles: {
+                6: { cellWidth: 50 }
+            }
+        });
+        
+        // Agregar links clickeables después de la tabla
+        let currentY = doc.lastAutoTable.finalY + 10;
+        
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Enlaces a Evidencias:', 10, currentY);
+        currentY += 8;
+        
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        
+        tableData.forEach((row, rowIndex) => {
+            if (row[6] && typeof row[6] === 'object' && row[6].links && row[6].links.length > 0) {
+                const nombreCompleto = row[0];
+                const fecha = row[3];
+                
+                doc.setFont('helvetica', 'bold');
+                doc.text(`${nombreCompleto} (${fecha}):`, 10, currentY);
+                currentY += 5;
+                
+                doc.setFont('helvetica', 'normal');
+                
+                row[6].links.forEach((link, linkIndex) => {
+                    const linkText = `  [${linkIndex + 1}] ${link.text || `Evidencia ${linkIndex + 1}`}`;
+                    
+                    // Agregar texto del link
+                    doc.setTextColor(0, 0, 255);
+                    doc.text(linkText, 15, currentY);
+                    
+                    // Crear área clickeable
+                    const textWidth = doc.getTextWidth(linkText);
+                    doc.link(15, currentY - 3, textWidth, 4, { url: link.url });
+                    
+                    currentY += 4;
+                    
+                    // Verificar si necesitamos nueva página
+                    if (currentY > 190) {
+                        doc.addPage();
+                        currentY = 20;
+                    }
+                });
+                
+                currentY += 3; // Espacio entre registros
+            }
+        });
+        
+        doc.setTextColor(0, 0, 0); // Restaurar color negro
+        
+    } else {
+        // Modo normal sin links especiales
+        doc.autoTable({
+            head: [getTableHeaders()],
+            body: tableData,
+            startY: 40,
+            styles: {
+                fontSize: 8,
+                cellPadding: 2
+            },
+            headStyles: {
+                fillColor: [102, 126, 234],
+                textColor: 255,
+                fontStyle: 'bold'
+            },
+            alternateRowStyles: {
+                fillColor: [248, 249, 250]
+            }
         });
     }
-    
-    doc.autoTable(tableConfig);
     
     addPDFFooter(doc);
     pdfBlob = doc.output('blob');
