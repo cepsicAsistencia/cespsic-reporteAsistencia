@@ -8,7 +8,7 @@ let pdfBlob = null;
 const GOOGLE_CLIENT_ID = '799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.googleusercontent.com';
 const SHEET_ID = '146Q1MG0AUCnzacqrN5kBENRuiql8o07Uts-l_gimL2I';
 
-// IMPORTANTE: Reemplazar con la URL de tu Google Apps Script deployment
+// IMPORTANTE: URL del Google Apps Script deployment
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzhkh8KZSA3BWEi01lgC6Bpwm2Gyfufy5_npN9N2ajY_u5-h6T180TsS0jI7M5l_h0/exec';
 
 // Usuarios autorizados para generar reportes
@@ -62,7 +62,7 @@ function initializeApp() {
     
     // Mostrar estado de configuración
     console.log('Client ID configurado:', GOOGLE_CLIENT_ID ? 'Sí' : 'No');
-    console.log('Script URL configurado:', GOOGLE_SCRIPT_URL !== 'https://script.google.com/macros/s/AKfycbzhkh8KZSA3BWEi01lgC6Bpwm2Gyfufy5_npN9N2ajY_u5-h6T180TsS0jI7M5l_h0/exec' ? 'Sí' : 'No');
+    console.log('Script URL configurado:', GOOGLE_SCRIPT_URL !== 'REEMPLAZAR_CON_TU_SCRIPT_URL' ? 'Sí' : 'No');
     console.log('Usuarios autorizados:', AUTHORIZED_USERS.length);
 }
 
@@ -128,14 +128,84 @@ function validateDates() {
 
 function loadGoogleSignInScript() {
     console.log('Intentando cargar Google Sign-In...');
+    console.log('Verificando disponibilidad de Google API...');
     
-    if (typeof google !== 'undefined' && google.accounts) {
-        console.log('Google Sign-In API disponible');
-        initializeGoogleSignIn();
-    } else {
-        console.log('Esperando Google Sign-In API...');
-        setTimeout(loadGoogleSignInScript, 500);
+    // Contador para intentos
+    let attempts = 0;
+    const maxAttempts = 20; // 10 segundos máximo
+    
+    function checkGoogleAPI() {
+        attempts++;
+        console.log(`Intento ${attempts}/${maxAttempts} - Verificando Google API...`);
+        
+        if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+            console.log('Google Sign-In API disponible');
+            initializeGoogleSignIn();
+        } else if (attempts < maxAttempts) {
+            console.log('Google API no disponible aún, reintentando...');
+            setTimeout(checkGoogleAPI, 500);
+        } else {
+            console.error('Google Sign-In API no se pudo cargar después de', maxAttempts, 'intentos');
+            showFallbackButton();
+        }
     }
+    
+    checkGoogleAPI();
+}
+
+function showFallbackButton() {
+    console.log('Mostrando botón de respaldo...');
+    const container = document.getElementById("signin-button-container");
+    
+    container.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+            <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 15px; margin-bottom: 15px; color: #856404;">
+                ⚠️ No se pudo cargar el sistema de autenticación de Google.<br>
+                Esto puede deberse a bloqueadores de anuncios o restricciones de red.
+            </div>
+            <button class="google-signin-btn" onclick="tryManualAuth()" style="margin: 10px;">
+                🔄 Reintentar Autenticación
+            </button>
+            <button class="google-signin-btn" onclick="showAuthInstructions()" style="background: #17a2b8; margin: 10px;">
+                ❓ Ver Instrucciones
+            </button>
+        </div>
+    `;
+}
+
+function tryManualAuth() {
+    console.log('Reintentando autenticación manual...');
+    const container = document.getElementById("signin-button-container");
+    container.innerHTML = '<div style="text-align: center; padding: 20px;">🔄 Reintentando cargar Google Sign-In...</div>';
+    
+    // Reiniciar el proceso
+    setTimeout(() => {
+        loadGoogleSignInScript();
+    }, 1000);
+}
+
+function showAuthInstructions() {
+    const container = document.getElementById("signin-button-container");
+    container.innerHTML = `
+        <div style="background: #e3f2fd; border: 1px solid #90caf9; border-radius: 8px; padding: 20px; text-align: left;">
+            <h4 style="color: #1976d2; margin-bottom: 15px;">📋 Instrucciones para solucionar problemas de autenticación:</h4>
+            <ol style="color: #666; line-height: 1.6;">
+                <li><strong>Desactive bloqueadores de anuncios</strong> temporalmente</li>
+                <li><strong>Use modo incógnito</strong> del navegador</li>
+                <li><strong>Verifique su conexión a internet</strong></li>
+                <li><strong>Intente con Google Chrome</strong> si usa otro navegador</li>
+                <li><strong>Recargue completamente la página</strong> (Ctrl+F5)</li>
+            </ol>
+            <div style="text-align: center; margin-top: 15px;">
+                <button class="google-signin-btn" onclick="location.reload()" style="background: #28a745;">
+                    🔄 Recargar Página
+                </button>
+                <button class="google-signin-btn" onclick="tryManualAuth()" style="margin-left: 10px;">
+                    🔙 Volver a Intentar
+                </button>
+            </div>
+        </div>
+    `;
 }
 
 function initializeGoogleSignIn() {
@@ -286,7 +356,7 @@ function enableForm() {
     updateSubmitButton();
     
     // Solo validar backend si la URL está configurada
-    if (GOOGLE_SCRIPT_URL !== 'https://script.google.com/macros/s/AKfycbzhkh8KZSA3BWEi01lgC6Bpwm2Gyfufy5_npN9N2ajY_u5-h6T180TsS0jI7M5l_h0/exec') {
+    if (GOOGLE_SCRIPT_URL !== 'REEMPLAZAR_CON_TU_SCRIPT_URL') {
         validateBackendAccess();
     } else {
         console.warn('⚠️ Backend no configurado. Actualizar GOOGLE_SCRIPT_URL en script.js');
@@ -436,7 +506,7 @@ async function handleFormSubmit(e) {
 async function fetchAttendanceData(fechaDesde, fechaHasta) {
     try {
         // Verificar que el backend esté configurado
-        if (GOOGLE_SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbzhkh8KZSA3BWEi01lgC6Bpwm2Gyfufy5_npN9N2ajY_u5-h6T180TsS0jI7M5l_h0/exec') {
+        if (GOOGLE_SCRIPT_URL === 'REEMPLAZAR_CON_TU_SCRIPT_URL') {
             throw new Error('Sistema backend no configurado. Contacte al administrador.');
         }
         
