@@ -604,64 +604,73 @@ async function fetchAttendanceData(fechaDesde, fechaHasta) {
     console.log('Script URL:', GOOGLE_SCRIPT_URL);
     console.log('Rango de fechas:', fechaDesde, 'al', fechaHasta);
     
+    const requestData = {
+        action: 'get_attendance_data',
+        userEmail: currentUser.email,
+        fechaDesde: fechaDesde,
+        fechaHasta: fechaHasta,
+        filtroTipo: document.getElementById('filtro_tipo').value,
+        filtroModalidad: document.getElementById('filtro_modalidad').value,
+        timestamp: new Date().toISOString()
+    };
+    
+    console.log('Datos de solicitud:', requestData);
+    
+    // MÉTODO 1: Intentar JSONP
     try {
-        const requestData = {
-            action: 'get_attendance_data',
-            userEmail: currentUser.email,
-            fechaDesde: fechaDesde,
-            fechaHasta: fechaHasta,
-            filtroTipo: document.getElementById('filtro_tipo').value,
-            filtroModalidad: document.getElementById('filtro_modalidad').value,
-            timestamp: new Date().toISOString()
-        };
+        console.log('Enviando solicitud al Google Apps Script via JSONP...');
+        const response = await fetchWithJSONP(GOOGLE_SCRIPT_URL, requestData);
         
-        console.log('Datos de solicitud:', requestData);
-        console.log('Enviando solicitud al Google Apps Script...');
+        if (response && response.success && response.data) {
+            attendanceData = response.data;
+            console.log(`✅ DATOS REALES OBTENIDOS VIA JSONP: ${attendanceData.length} registros`);
+            return;
+        } else {
+            throw new Error(response?.message || 'Respuesta inválida del Google Apps Script via JSONP');
+        }
+    } catch (jsonpError) {
+        console.log('JSONP falló:', jsonpError.message);
+    }
+    
+    // MÉTODO 2: Intentar fetch no-cors
+    try {
+        console.log('Intentando con fetch no-cors...');
+        const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestData)
+        });
         
-        // Intentar primero con JSONP
-        try {
-            const response = await fetchWithJSONP(GOOGLE_SCRIPT_URL, requestData);
-            
-            if (response && response.success && response.data) {
-                attendanceData = response.data;
-                console.log(`✅ DATOS REALES OBTENIDOS VIA JSONP: ${attendanceData.length} registros`);
-                return;
-            } else {
-                throw new Error(response?.message || 'Respuesta inválida del Google Apps Script via JSONP');
-            }
-        } catch (jsonpError) {
-            console.log('JSONP falló, intentando con fetch no-cors...');
-            
-            // Respaldo: usar fetch con no-cors y enviar al Apps Script
-            const response = await fetch(GOOGLE_SCRIPT_URL, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(requestData)
-            });
-            
-            console.log('Solicitud enviada via no-cors al Google Apps Script');
-            
-            // Como no podemos leer la respuesta con no-cors, 
-            // intentamos obtener datos directamente del sheet público
-            await tryDirectSheetAccess(fechaDesde, fechaHasta);
+        console.log('Solicitud no-cors enviada (no podemos verificar respuesta)');
+        // Con no-cors no podemos leer la respuesta, así que asumimos que se envió
+        // y intentamos acceso directo al sheet
+    } catch (fetchError) {
+        console.log('Fetch no-cors falló:', fetchError.message);
+    }
+    
+    // MÉTODO 3: Acceso directo al Google Sheet
+    try {
+        console.log('Intentando acceso directo al Google Sheet...');
+        await tryDirectSheetAccess(fechaDesde, fechaHasta);
+        
+        if (attendanceData && attendanceData.length > 0) {
+            console.log(`✅ DATOS REALES OBTENIDOS VIA CSV DIRECTO: ${attendanceData.length} registros`);
             return;
         }
-        
-    } catch (error) {
-        console.error('❌ ERROR con Google Apps Script:', error);
-        console.log('Motivo del error:', error.message);
-        
-        // Fallback final a datos de ejemplo
-        console.log('🔄 Usando datos de ejemplo como respaldo...');
-        attendanceData = generateSampleData(fechaDesde, fechaHasta);
-        console.log(`Datos de ejemplo generados: ${attendanceData.length} registros`);
-        
-        if (attendanceData.length === 0) {
-            throw new Error('No se pudieron obtener datos: ' + error.message);
-        }
+    } catch (csvError) {
+        console.log('Acceso directo falló:', csvError.message);
+    }
+    
+    // FALLBACK FINAL: Datos de ejemplo
+    console.log('🔄 Todos los métodos fallaron. Usando datos de ejemplo como respaldo...');
+    attendanceData = generateSampleData(fechaDesde, fechaHasta);
+    console.log(`Datos de ejemplo generados: ${attendanceData.length} registros`);
+    
+    if (attendanceData.length === 0) {
+        throw new Error('No se pudieron obtener datos por ningún método');
     }
 }
 
