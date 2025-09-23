@@ -160,6 +160,21 @@ h2 {
     display: inline-block;
 }
 
+/* Estilos específicos para Google Sign-In button */
+#signin-button-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 20px 0;
+}
+
+/* Personalizar el botón generado por Google */
+#signin-button-container iframe,
+#signin-button-container div[role="button"] {
+    margin: 0 auto !important;
+}
+
+/* Estilos para botón de respaldo */
 .google-signin-btn, .signout-btn {
     background: #4285f4;
     color: white;
@@ -175,12 +190,41 @@ h2 {
     gap: 10px;
     text-decoration: none;
     margin: 10px 5px;
+    width: auto;
+    min-width: 200px;
+    justify-content: center;
 }
 
 .google-signin-btn:hover {
     background: #3367d6;
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(66, 133, 244, 0.3);
+}
+
+/* Forzar centrado del contenedor de Google Sign-In */
+.auth-section {
+    background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+    border: 2px solid #64b5f6;
+    border-radius: 15px;
+    padding: 25px;
+    margin-bottom: 25px;
+    text-align: center;
+}
+
+.auth-section.authenticated {
+    background: linear-gradient(135deg, #e8f5e8 0%, #f1f8e9 100%);
+    border-color: #4caf50;
+}
+
+/* Asegurar que todo dentro del contenedor esté centrado */
+#signin-button-container > * {
+    margin: 0 auto;
+}
+
+/* Estilos específicos para el iframe de Google */
+#signin-button-container iframe {
+    display: block !important;
+    margin: 0 auto !important;
 }
 
 .signout-btn {
