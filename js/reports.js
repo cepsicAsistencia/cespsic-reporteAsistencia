@@ -518,16 +518,48 @@ async function handleFormSubmit(e) {
         return;
     }
     
-    if (!validateDates()) {
-        return;
-    }
-    
+    // VALIDACIÓN 1: Verificar que ambas fechas tengan valor
     const fechaDesde = document.getElementById('fecha_desde').value;
     const fechaHasta = document.getElementById('fecha_hasta').value;
     
     if (!fechaDesde || !fechaHasta) {
-        showStatus('Por favor, seleccione ambas fechas.', 'error');
+        showStatus('Por favor, seleccione ambas fechas (desde y hasta).', 'error');
         return;
+    }
+    
+    if (!validateDates()) {
+        return;
+    }
+    
+    // VALIDACIÓN 2: Verificar que al menos un checkbox esté marcado
+    const checkboxes = document.querySelectorAll('input[name="incluir_campos[]"]:checked');
+    if (checkboxes.length === 0) {
+        showStatus('Debe seleccionar al menos un campo para incluir en el reporte.', 'error');
+        return;
+    }
+    
+    // VALIDACIÓN 3: Mostrar mensaje de confirmación
+    const selectedFields = Array.from(checkboxes).map(cb => cb.nextElementSibling.textContent.split('(')[0].trim());
+    const filtroTipo = document.getElementById('filtro_tipo').value;
+    const filtroModalidad = document.getElementById('filtro_modalidad').value;
+    
+    let confirmMessage = `¿Está seguro de que desea generar el reporte con los siguientes criterios?
+
+📅 Período: ${fechaDesde} al ${fechaHasta}
+📋 Campos incluidos: ${selectedFields.join(', ')}`;
+    
+    if (filtroTipo) {
+        confirmMessage += `\n👥 Filtro tipo: ${filtroTipo}`;
+    }
+    if (filtroModalidad) {
+        confirmMessage += `\n💻 Filtro modalidad: ${filtroModalidad}`;
+    }
+    
+    confirmMessage += `\n\n⚠️ Este proceso puede tardar varios segundos.`;
+    
+    // Mostrar confirmación
+    if (!confirm(confirmMessage)) {
+        return; // Usuario canceló
     }
     
     showStatus('Obteniendo datos de asistencia...', 'loading');
@@ -536,7 +568,7 @@ async function handleFormSubmit(e) {
     submitBtn.textContent = 'Generando reporte...';
     
     try {
-        // Obtener datos de Google Sheets
+        // Obtener datos del Google Sheets
         await fetchAttendanceData(fechaDesde, fechaHasta);
         
         if (attendanceData.length === 0) {
@@ -569,38 +601,48 @@ async function handleFormSubmit(e) {
 
 async function fetchAttendanceData(fechaDesde, fechaHasta) {
     console.log('=== OBTENIENDO DATOS REALES DEL GOOGLE SHEET ===');
+    console.log('Sheet ID:', SHEET_ID);
     console.log('Rango de fechas:', fechaDesde, 'al', fechaHasta);
     
     try {
-        // Usar la API pública de Google Sheets para obtener datos CSV
+        // Construir URL para obtener CSV del Google Sheet
         const csvUrl = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`;
+        console.log('URL del CSV:', csvUrl);
         
-        console.log('Obteniendo datos del Google Sheet...');
+        console.log('Iniciando solicitud al Google Sheet...');
         const response = await fetch(csvUrl);
         
+        console.log('Respuesta recibida:', response.status, response.statusText);
+        
         if (!response.ok) {
-            throw new Error(`Error accediendo al Google Sheet: ${response.status}`);
+            throw new Error(`Error accediendo al Google Sheet: ${response.status} - ${response.statusText}`);
         }
         
         const csvText = await response.text();
-        console.log('Datos CSV obtenidos, procesando...');
+        console.log('Datos CSV obtenidos, tamaño:', csvText.length, 'caracteres');
+        console.log('Primeros 200 caracteres:', csvText.substring(0, 200));
         
         // Procesar CSV y filtrar por fechas
         attendanceData = processCSVData(csvText, fechaDesde, fechaHasta);
         
-        console.log(`Datos reales obtenidos: ${attendanceData.length} registros`);
+        console.log(`✅ DATOS REALES PROCESADOS: ${attendanceData.length} registros encontrados`);
         
         if (attendanceData.length === 0) {
-            throw new Error('No se encontraron registros en el rango de fechas seleccionado');
+            console.warn('No se encontraron registros en el rango de fechas. Usando datos de ejemplo como respaldo.');
+            attendanceData = generateSampleData(fechaDesde, fechaHasta);
+            console.log(`Datos de ejemplo generados: ${attendanceData.length} registros`);
         }
         
     } catch (error) {
-        console.error('Error obteniendo datos reales:', error);
+        console.error('❌ ERROR obteniendo datos reales:', error);
+        console.log('Motivo del error:', error.message);
         
         // Fallback a datos de ejemplo si falla la conexión
-        console.log('Usando datos de ejemplo como respaldo...');
+        console.log('🔄 Usando datos de ejemplo como respaldo...');
         attendanceData = generateSampleData(fechaDesde, fechaHasta);
+        console.log(`Datos de ejemplo generados: ${attendanceData.length} registros`);
         
+        // No lanzar error, usar datos de ejemplo
         if (attendanceData.length === 0) {
             throw new Error('No se pudieron obtener datos: ' + error.message);
         }
