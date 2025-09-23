@@ -34,7 +34,7 @@
                 <img src="https://lh3.googleusercontent.com/d/12tYxfzWgy3BVYjadXOEKlX5-uSsxIrBt" alt="CESPSIC" class="logo">
                 <img src="https://lh3.googleusercontent.com/d/1tR9QzPGbydb_qjDkZOKsoNU6_xIBGQP2" alt="Facultad de Psicología" class="logo">
             </div>
-            <h1>Generador de Reportes de Asistencia - Centro de Servicios Psicológicos (CESPSIC) v.1.0.26</h1>
+            <h1>Generador de Reportes de Asistencia - Centro de Servicios Psicológicos (CESPSIC) v.1.0.27</h1>
         </div>
 
         <!-- Sección de Autenticación -->
@@ -98,6 +98,18 @@
                                 <input type="checkbox" id="incluir_basicos" name="incluir_campos[]" value="basicos" checked disabled>
                                 <label for="incluir_basicos">Información básica (Nombre, Tipo estudiante, Modalidad, Fecha, Hora, Tipo registro)</label>
                             </div>
+                            
+                            <!-- Checkbox especial para Evidencias -->
+                            <div class="checkbox-item checkbox-evidencias">
+                                <input type="checkbox" id="incluir_evidencias_solo" name="incluir_campos[]" value="evidencias_solo" onchange="handleEvidenciasChange(this)">
+                                <label for="incluir_evidencias_solo">
+                                    <strong>📎 Solo Evidencias</strong> (Links a documentos - Columna AI)
+                                    <br><small style="color: #666;">Al marcar esta opción se desmarcarán los demás campos</small>
+                                </label>
+                            </div>
+                            
+                            <hr style="border: none; border-top: 1px solid #eee; margin: 15px 0;">
+                            
                             <div class="checkbox-item">
                                 <input type="checkbox" id="incluir_intervenciones" name="incluir_campos[]" value="intervenciones" checked>
                                 <label for="incluir_intervenciones">Intervenciones psicológicas y grupos de edad</label>
@@ -108,7 +120,7 @@
                             </div>
                             <div class="checkbox-item">
                                 <input type="checkbox" id="incluir_evidencias" name="incluir_campos[]" value="evidencias" checked>
-                                <label for="incluir_evidencias">Total de evidencias</label>
+                                <label for="incluir_evidencias">Total de evidencias (Columna AH)</label>
                             </div>
                             <div class="checkbox-item">
                                 <input type="checkbox" id="incluir_comentarios" name="incluir_campos[]" value="comentarios">
@@ -178,6 +190,15 @@
     </div>
 
     <!-- JavaScript -->
+    <script>
+        // Función global para manejar el checkbox de evidencias
+        function handleEvidenciasChange(checkbox) {
+            // Esta función se implementará en reports.js
+            if (typeof window.handleEvidenciasChange === 'function') {
+                window.handleEvidenciasChange(checkbox);
+            }
+        }
+    </script>
     <script src="js/reports.js"></script>
 </body>
 </html>
