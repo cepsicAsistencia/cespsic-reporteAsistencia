@@ -532,8 +532,8 @@ function handleEvidenciasChange(checkbox) {
             }
         });
         
-        // Mostrar mensaje informativo específico
-        showStatus('Modo "Solo Evidencias de Salida" activado. Se filtrarán únicamente registros de SALIDA con links a documentos de la columna AI. Los links serán clickeables en el PDF.', 'loading');
+        // Mostrar mensaje informativo actualizado
+        showStatus('Modo "Solo Evidencias de Salida" activado. Se filtrarán únicamente registros de SALIDA. Se mostrarán los nombres de las evidencias y la carpeta en Drive donde están almacenadas.', 'loading');
         setTimeout(() => hideStatus(), 6000);
     }
     
@@ -760,7 +760,9 @@ function generateSampleData(fechaDesde, fechaHasta) {
             familia: String(Math.floor(Math.random() * 2)),
             actividades_realizadas: 'Entrevista psicológica, Sesiones terapéuticas',
             total_evidencias: String(Math.floor(Math.random() * 4)),
-            links_evidencias: `https://drive.google.com/file/d/ejemplo${i+1}_documento/view, https://drive.google.com/file/d/ejemplo${i+1}_evidencia/view`,
+            // CAMPOS ACTUALIZADOS PARA EVIDENCIAS
+            nombres_evidencias: `Documento_${i+1}.pdf, Evidencia_${i+1}.docx, Reporte_${i+1}.pdf`,
+            carpeta_evidencias: `Carpeta_Estudiante_${i+1}`,
             comentarios_adicionales: `Registro de ejemplo ${i + 1} - Datos de demostración`,
             actividades_varias_detalle: '',
             pruebas_psicologicas_detalle: 'MMPI-2, WAIS-IV',
@@ -795,101 +797,30 @@ async function generatePDF(fechaDesde, fechaHasta) {
     const incluirCampos = getSelectedFields();
     const isModoEvidencias = incluirCampos.includes('evidencias_solo');
     
-    if (isModoEvidencias) {
-        // Preparar datos específicamente para modo evidencias
-        const headers = getTableHeaders();
-        const processedData = [];
-        
-        tableData.forEach(row => {
-            const newRow = [...row];
-            // La columna de evidencias está en la posición 6
-            if (row[6] && typeof row[6] === 'object' && row[6].links) {
-                // Convertir los links a texto simple separado por saltos de línea
-                const linksText = row[6].links.map(link => link.url).join('\n');
-                newRow[6] = linksText;
-            } else if (typeof row[6] === 'string') {
-                // Si ya es string, dejarlo como está
-                newRow[6] = row[6];
-            } else {
-                newRow[6] = 'Sin evidencias';
-            }
-            processedData.push(newRow);
-        });
-        
-        // Configurar la tabla con columna de evidencias clickeable
-        doc.autoTable({
-            head: [headers],
-            body: processedData,
-            startY: 40,
-            styles: {
-                fontSize: 8,
-                cellPadding: 2,
-                lineColor: [200, 200, 200],
-                lineWidth: 0.1
-            },
-            headStyles: {
-                fillColor: [102, 126, 234],
-                textColor: 255,
-                fontStyle: 'bold'
-            },
-            alternateRowStyles: {
-                fillColor: [248, 249, 250]
-            },
-            columnStyles: {
-                6: { 
-                    cellWidth: 80, // Columna de evidencias más ancha
-                    fontSize: 7,   // Fuente más pequeña para los links
-                    textColor: [0, 0, 255] // Azul para simular links
-                }
-            },
-            didDrawCell: function(data) {
-                // Hacer los links clickeables en la columna de evidencias
-                if (data.column.index === 6 && data.section === 'body') {
-                    const cellContent = processedData[data.row.index][6];
-                    
-                    if (cellContent && cellContent !== 'Sin evidencias' && cellContent.includes('https://')) {
-                        const links = cellContent.split('\n');
-                        
-                        links.forEach((link, index) => {
-                            if (link.trim().startsWith('https://')) {
-                                // Calcular la posición Y para cada link
-                                const linkY = data.cell.y + (index * 3) + 3;
-                                
-                                // Crear área clickeable para todo el ancho de la celda
-                                doc.link(
-                                    data.cell.x + 1,
-                                    linkY - 1,
-                                    data.cell.width - 2,
-                                    3,
-                                    { url: link.trim() }
-                                );
-                            }
-                        });
-                    }
-                }
-            }
-        });
-        
-    } else {
-        // Modo normal sin modificaciones especiales
-        doc.autoTable({
-            head: [getTableHeaders()],
-            body: tableData,
-            startY: 40,
-            styles: {
-                fontSize: 8,
-                cellPadding: 2
-            },
-            headStyles: {
-                fillColor: [102, 126, 234],
-                textColor: 255,
-                fontStyle: 'bold'
-            },
-            alternateRowStyles: {
-                fillColor: [248, 249, 250]
-            }
-        });
-    }
+    // Configurar la tabla normalmente (sin clickeable links)
+    doc.autoTable({
+        head: [getTableHeaders()],
+        body: tableData,
+        startY: 40,
+        styles: {
+            fontSize: 8,
+            cellPadding: 2,
+            lineColor: [200, 200, 200],
+            lineWidth: 0.1
+        },
+        headStyles: {
+            fillColor: [102, 126, 234],
+            textColor: 255,
+            fontStyle: 'bold'
+        },
+        alternateRowStyles: {
+            fillColor: [248, 249, 250]
+        },
+        columnStyles: isModoEvidencias ? {
+            6: { cellWidth: 60 }, // Nombres de evidencias
+            7: { cellWidth: 50 }  // Carpeta de evidencias
+        } : {}
+    });
     
     addPDFFooter(doc);
     pdfBlob = doc.output('blob');
@@ -930,8 +861,8 @@ function getTableHeaders() {
     const headers = ['Nombre Completo', 'Tipo Estudiante', 'Modalidad', 'Fecha', 'Hora', 'Tipo Registro'];
     
     if (incluirCampos.includes('evidencias_solo')) {
-        // Solo evidencias: agregar columna de links
-        headers.push('Links a Evidencias');
+        // Solo evidencias: agregar las dos nuevas columnas
+        headers.push('Nombres de Evidencias', 'Carpeta en Drive');
     } else {
         // Modo normal: agregar campos según selección
         if (incluirCampos.includes('intervenciones')) {
@@ -970,12 +901,11 @@ function prepareTableData() {
         ];
         
         if (incluirCampos.includes('evidencias_solo')) {
-            // Solo evidencias: agregar links de documentos como enlaces clickeables
-            const linksText = record.links_evidencias || 'Sin evidencias';
-            row.push({
-                content: linksText,
-                links: linksText !== 'Sin evidencias' ? parseLinksFromText(linksText) : []
-            });
+            // Solo evidencias: agregar las dos nuevas columnas
+            row.push(
+                record.nombres_evidencias || 'Sin evidencias',
+                record.carpeta_evidencias || 'Sin carpeta especificada'
+            );
         } else {
             // Modo normal: agregar campos según selección
             if (incluirCampos.includes('intervenciones')) {
