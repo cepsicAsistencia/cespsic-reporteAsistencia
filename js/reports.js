@@ -45,11 +45,45 @@ const COLUMN_MAPPING = {
 
 // Inicializar aplicación
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('=== DOM CARGADO ===');
+    console.log('Fecha/hora:', new Date().toISOString());
+    console.log('URL actual:', window.location.href);
+    console.log('User Agent:', navigator.userAgent);
+    
+    // Verificar elementos del DOM
+    const container = document.getElementById('signin-button-container');
+    console.log('Contenedor de botón encontrado:', container ? 'SÍ' : 'NO');
+    if (container) {
+        console.log('Contenedor HTML inicial:', container.innerHTML);
+    }
+    
     initializeApp();
 });
 
 function initializeApp() {
     console.log('=== INICIANDO APLICACIÓN CESPSIC REPORTES v.1.0.1 ===');
+    
+    // Verificar scripts inmediatamente
+    console.log('Estado de Google:', typeof google);
+    if (typeof google !== 'undefined') {
+        console.log('Google object existe');
+        console.log('Google.accounts:', typeof google.accounts);
+        if (google.accounts) {
+            console.log('Google.accounts.id:', typeof google.accounts.id);
+        }
+    }
+    
+    // Verificar si el elemento contenedor existe
+    const container = document.getElementById('signin-button-container');
+    if (!container) {
+        console.error('ERROR: Contenedor signin-button-container no encontrado');
+        return;
+    } else {
+        console.log('Contenedor de autenticación encontrado');
+    }
+    
+    // Mostrar mensaje temporal en el contenedor
+    container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">🔄 Cargando sistema de autenticación...</div>';
     
     loadGoogleSignInScript();
     setupEventListeners();
@@ -64,6 +98,15 @@ function initializeApp() {
     console.log('Client ID configurado:', GOOGLE_CLIENT_ID ? 'Sí' : 'No');
     console.log('Script URL configurado:', GOOGLE_SCRIPT_URL !== 'REEMPLAZAR_CON_TU_SCRIPT_URL' ? 'Sí' : 'No');
     console.log('Usuarios autorizados:', AUTHORIZED_USERS.length);
+    
+    // Timeout de seguridad - si después de 15 segundos no hay botón, mostrar alternativa
+    setTimeout(() => {
+        const container = document.getElementById('signin-button-container');
+        if (container && container.innerHTML.includes('Cargando sistema')) {
+            console.error('TIMEOUT: Google Sign-In no se cargó en 15 segundos');
+            showFallbackButton();
+        }
+    }, 15000);
 }
 
 function isGoogleChrome() {
