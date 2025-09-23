@@ -9,7 +9,7 @@ const GOOGLE_CLIENT_ID = '799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.goo
 const SHEET_ID = '146Q1MG0AUCnzacqrN5kBENRuiql8o07Uts-l_gimL2I';
 
 // URL del Google Apps Script deployment
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbweYh1FF5tvJU4d0PYBP8rszDgVko2b23QOmrwrVcVEzvjDe1vJjZHdy_21LJtP6SM/exec';
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxXj1s751aX_qZzcqO_CBZmPD9muOBC3-DqxSiOM9LODnqhwXXUHN3JfK7moVQTdh0/exec';
 
 // Usuarios autorizados para generar reportes
 const AUTHORIZED_USERS = [
