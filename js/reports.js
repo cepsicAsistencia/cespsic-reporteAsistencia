@@ -609,34 +609,49 @@ async function handleFormSubmit(e) {
     const selectedFields = Array.from(checkboxes).map(cb => cb.nextElementSibling.textContent.split('(')[0].trim());
     const filtroTipo = document.getElementById('filtro_tipo').value;
     const filtroModalidad = document.getElementById('filtro_modalidad').value;
+    const incluirCampos = getSelectedFields();
+    const isModoEvidencias = incluirCampos.includes('evidencias_solo');
     
     let confirmMessage = `¿Está seguro de que desea generar el reporte?
 
-📅 Período: ${fechaDesde} al ${fechaHasta}
-📋 Campos: ${selectedFields.join(', ')}`;
+Período: ${fechaDesde} al ${fechaHasta}
+Campos: ${selectedFields.join(', ')}`;
     
-    if (filtroTipo) confirmMessage += `\n👥 Tipo: ${filtroTipo}`;
-    if (filtroModalidad) confirmMessage += `\n💻 Modalidad: ${filtroModalidad}`;
+    if (isModoEvidencias) {
+        confirmMessage += `\nModo: Solo evidencias de SALIDA`;
+    }
+    if (filtroTipo) confirmMessage += `\nTipo: ${filtroTipo}`;
+    if (filtroModalidad) confirmMessage += `\nModalidad: ${filtroModalidad}`;
     
     if (!confirm(confirmMessage)) {
         return;
     }
     
-    showStatus('Obteniendo datos de asistencia...', 'loading');
+    showStatus('Conectando con Google Sheets...', 'loading');
     const submitBtn = document.getElementById('submit_btn');
     submitBtn.disabled = true;
-    submitBtn.textContent = 'Generando reporte...';
+    submitBtn.textContent = 'Conectando...';
     
     try {
+        // Intentar obtener datos reales
         await fetchAttendanceData(fechaDesde, fechaHasta);
         
-        if (attendanceData.length === 0) {
-            showStatus('No se encontraron registros en el rango seleccionado.', 'error');
+        // Verificar si hay datos después del filtrado
+        if (!attendanceData || attendanceData.length === 0) {
+            showStatus(
+                isModoEvidencias 
+                    ? 'No se encontraron registros de SALIDA con evidencias en el rango de fechas seleccionado. Intente ampliar el rango de fechas o verificar los filtros.'
+                    : 'No se encontraron registros en el rango de fechas seleccionado. Intente ampliar el rango de fechas o verificar los filtros.',
+                'error'
+            );
             updateSubmitButton();
             return;
         }
         
-        showStatus(`Generando PDF con ${attendanceData.length} registros...`, 'loading');
+        showStatus(`Generando PDF con ${attendanceData.length} registros reales...`, 'loading');
+        submitBtn.textContent = 'Generando PDF...';
+        
+        // Generar PDF solo con datos reales
         await generatePDF(fechaDesde, fechaHasta);
         
         showDownloadModal(fechaDesde, fechaHasta);
@@ -645,7 +660,21 @@ async function handleFormSubmit(e) {
         
     } catch (error) {
         console.error('Error generando reporte:', error);
-        showStatus('Error al generar el reporte: ' + error.message, 'error');
+        
+        // Mostrar mensaje específico según el tipo de error
+        let errorMessage = 'Error al generar el reporte: ';
+        
+        if (error.message.includes('conectar con Google Sheets')) {
+            errorMessage += 'No se pudo conectar con Google Sheets. Verifique su conexión a internet y que el sistema tenga los permisos necesarios.';
+        } else if (error.message.includes('No se pudieron obtener los datos del servidor')) {
+            errorMessage += 'El servidor no pudo procesar la solicitud. Intente nuevamente en unos momentos.';
+        } else if (error.message.includes('Usuario no autorizado')) {
+            errorMessage += 'Su sesión ha expirado o no tiene permisos. Cierre sesión y vuelva a autenticarse.';
+        } else {
+            errorMessage += error.message;
+        }
+        
+        showStatus(errorMessage, 'error');
         updateSubmitButton();
     }
 }
@@ -662,11 +691,16 @@ async function fetchAttendanceData(fechaDesde, fechaHasta) {
             fechaHasta: fechaHasta,
             filtroTipo: document.getElementById('filtro_tipo').value,
             filtroModalidad: document.getElementById('filtro_modalidad').value,
-            filtroTipoRegistro: isModoEvidencias ? 'salida' : '', // Nuevo filtro para modo evidencias
-            modoEvidencias: isModoEvidencias // Flag para el backend
+            filtroTipoRegistro: isModoEvidencias ? 'salida' : '',
+            modoEvidencias: isModoEvidencias
         });
         
         if (result.success && result.data) {
+            // Verificar si los datos son reales o de ejemplo
+            if (result.dataSource === 'sample_data') {
+                throw new Error('No se pudo conectar con Google Sheets. Verifique la conexión y permisos.');
+            }
+            
             attendanceData = result.data;
             
             // Filtro adicional en frontend para modo evidencias
@@ -674,24 +708,20 @@ async function fetchAttendanceData(fechaDesde, fechaHasta) {
                 attendanceData = attendanceData.filter(record => 
                     record.tipo_registro && record.tipo_registro.toLowerCase() === 'salida'
                 );
-                console.log(`📋 Modo evidencias activo - Filtrando solo "salidas": ${attendanceData.length} registros`);
+                console.log(`Modo evidencias activo - Filtrando solo "salidas": ${attendanceData.length} registros`);
             }
             
-            console.log(`✅ Datos obtenidos: ${attendanceData.length} registros`);
+            console.log(`Datos reales obtenidos: ${attendanceData.length} registros`);
         } else {
-            throw new Error(result.message || 'No se pudieron obtener los datos');
+            throw new Error(result.message || 'No se pudieron obtener los datos del servidor');
         }
         
     } catch (error) {
-        console.error('❌ Error obteniendo datos:', error);
+        console.error('Error obteniendo datos:', error);
         
-        // Fallback a datos de ejemplo
-        console.log('🔄 Generando datos de ejemplo como respaldo...');
-        attendanceData = generateSampleData(fechaDesde, fechaHasta);
-        
-        if (attendanceData.length === 0) {
-            throw new Error('No se pudieron obtener datos por ningún método');
-        }
+        // No usar datos de ejemplo - mostrar error
+        attendanceData = [];
+        throw new Error('Error de conexión: ' + error.message);
     }
 }
 
