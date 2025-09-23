@@ -271,12 +271,13 @@ function initializeGoogleSignIn() {
         google.accounts.id.renderButton(
             container,
             {
-                theme: "outline",
-                size: "large",
-                text: "signin_with",
-                shape: "rectangular",
-                logo_alignment: "left",
-                width: "300"
+                theme: "filled_blue",        // Tema azul
+                size: "large",               // Tamaño grande
+                text: "signin_with",         // Texto "Sign in with Google"
+                shape: "rectangular",        // Forma rectangular
+                logo_alignment: "left",      // Logo a la izquierda
+                width: "300",               // Ancho fijo
+                locale: "es"                // Idioma español
             }
         );
 
