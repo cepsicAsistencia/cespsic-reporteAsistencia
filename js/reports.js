@@ -61,7 +61,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function initializeApp() {
-    console.log('=== INICIANDO APLICACIÓN CESPSIC REPORTES v.1.0.1 ===');
+    console.log('=== INICIANDO APLICACIÓN CESPSIC REPORTES v.1.0.13 ===');
+    console.log('NOTA: Esta versión usa datos de ejemplo para demostración');
+    console.log('Para conectar datos reales, se necesita resolver problemas de CORS con Google Apps Script');
     
     // Verificar scripts inmediatamente
     console.log('Estado de Google:', typeof google);
@@ -83,7 +85,7 @@ function initializeApp() {
     }
     
     // Mostrar mensaje temporal en el contenedor
-    container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">🔄 Cargando sistema de autenticación...</div>';
+    container.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;">Cargando sistema de autenticación...</div>';
     
     loadGoogleSignInScript();
     setupEventListeners();
@@ -547,22 +549,29 @@ async function handleFormSubmit(e) {
 
 // ========== GOOGLE SHEETS DATA FETCHING ==========
 
+// ========== DATA FETCHING ==========
+
 async function fetchAttendanceData(fechaDesde, fechaHasta) {
     try {
-        console.log('Generando datos de ejemplo para el reporte...');
+        console.log('=== GENERANDO DATOS DE EJEMPLO PARA REPORTE ===');
+        console.log('Rango de fechas:', fechaDesde, 'al', fechaHasta);
+        console.log('Nota: Se están usando datos de ejemplo para demostración');
         
-        // Por ahora usamos datos de ejemplo para evitar errores CORS
-        // En producción, esto se conectaría al Google Apps Script
+        // Simular delay de procesamiento
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        // Generar datos de ejemplo
         attendanceData = generateSampleData(fechaDesde, fechaHasta);
         
-        console.log(`Datos obtenidos: ${attendanceData.length} registros (datos de ejemplo)`);
+        console.log(`Datos generados: ${attendanceData.length} registros de ejemplo`);
         
-        // Simular delay de red
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        if (attendanceData.length === 0) {
+            throw new Error('No se generaron registros para el rango de fechas seleccionado');
+        }
         
     } catch (error) {
-        console.error('Error obteniendo datos:', error);
-        throw new Error('No se pudieron obtener los datos de asistencia: ' + error.message);
+        console.error('Error generando datos:', error);
+        throw new Error('No se pudieron generar los datos de ejemplo: ' + error.message);
     }
 }
 
