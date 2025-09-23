@@ -13,10 +13,10 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     
-    <!-- Verificaci贸n de carga de scripts -->
+    <!-- Verificación de carga de scripts -->
     <script>
         window.addEventListener('load', function() {
-            console.log('馃攳 Verificando scripts cargados:');
+            console.log('🔍 Verificando scripts cargados:');
             console.log('- Google API:', typeof google !== 'undefined' ? 'Cargado' : 'No cargado');
             console.log('- jsPDF:', typeof window.jspdf !== 'undefined' ? 'Cargado' : 'No cargado');
             console.log('- Script principal:', typeof initializeApp !== 'undefined' ? 'Cargado' : 'NO CARGADO - REVISAR js/script.js');
@@ -32,38 +32,38 @@
             <div class="logos">
                 <img src="https://lh3.googleusercontent.com/d/19ybSSXzb1ko_982HrRi7Kd7dPfN8Peuc" alt="UAS" class="logo">
                 <img src="https://lh3.googleusercontent.com/d/12tYxfzWgy3BVYjadXOEKlX5-uSsxIrBt" alt="CESPSIC" class="logo">
-                <img src="https://lh3.googleusercontent.com/d/1tR9QzPGbydb_qjDkZOKsoNU6_xIBGQP2" alt="Facultad de Psicolog铆a" class="logo">
+                <img src="https://lh3.googleusercontent.com/d/1tR9QzPGbydb_qjDkZOKsoNU6_xIBGQP2" alt="Facultad de Psicología" class="logo">
             </div>
-            <h1>Generador de Reportes de Asistencia - Centro de Servicios Psicol贸gicos (CESPSIC) v.1.0.22</h1>
+            <h1>Generador de Reportes de Asistencia - Centro de Servicios Psicológicos (CESPSIC) v.1.0.22</h1>
         </div>
 
-        <!-- Secci贸n de Autenticaci贸n -->
+        <!-- Sección de Autenticación -->
         <div class="auth-section" id="auth-section">
             <div class="auth-title" id="auth-title">
-                馃敀 Autenticaci贸n Administrativa Requerida
+                🔒 Autenticación Administrativa Requerida
             </div>
             
             <div class="auth-warning">
-                鈿狅笍 Solo administradores autorizados pueden generar reportes de asistencia
+                ⚠️ Solo administradores autorizados pueden generar reportes de asistencia
             </div>
             
-            <!-- Informaci贸n del usuario autenticado -->
+            <!-- Información del usuario autenticado -->
             <div class="user-info" id="user-info">
                 <img id="user-avatar" class="user-avatar" src="" alt="Avatar">
                 <div class="user-email" id="user-email"></div>
                 <div class="user-name" id="user-name"></div>
-                <div class="user-status" id="user-status">鉁?Usuario Autorizado</div>
-                <button class="signout-btn" onclick="signOut()">馃毆 Cerrar Sesi贸n</button>
+                <div class="user-status" id="user-status">✅ Usuario Autorizado</div>
+                <button class="signout-btn" onclick="signOut()">🚪 Cerrar Sesión</button>
             </div>
             
-            <!-- Bot贸n de inicio de sesi贸n con Google -->
+            <!-- Botón de inicio de sesión con Google -->
             <div id="signin-button-container">
-                <!-- El bot贸n se genera autom谩ticamente por Google Sign-In API -->
+                <!-- El botón se genera automáticamente por Google Sign-In API -->
             </div>
             
             <div class="auth-info" style="margin-top: 15px; padding: 10px; background: #e3f2fd; border-radius: 8px; font-size: 14px; color: #1565c0;">
-                鈩癸笍 <strong>Nota:</strong> Solo usuarios autorizados pueden acceder a esta funcionalidad.
-                <br>鈩癸笍 <strong>Acceso:</strong> Restringido a administradores de CESPSIC.
+                ℹ️ <strong>Nota:</strong> Solo usuarios autorizados pueden acceder a esta funcionalidad.
+                <br>ℹ️ <strong>Acceso:</strong> Restringido a administradores de CESPSIC.
             </div>
         </div>
 
@@ -71,7 +71,7 @@
         <div class="form-overlay" id="form-container">
             <form id="reportForm">
                 <div class="form-section">
-                    <h2>馃搵 Generar Reporte de Asistencias</h2>
+                    <h2>📋 Generar Reporte de Asistencias</h2>
                     <p class="form-description">
                         Seleccione el rango de fechas para generar el reporte PDF con todas las asistencias registradas.
                     </p>
@@ -96,11 +96,11 @@
                         <div class="checkbox-group">
                             <div class="checkbox-item">
                                 <input type="checkbox" id="incluir_basicos" name="incluir_campos[]" value="basicos" checked disabled>
-                                <label for="incluir_basicos">Informaci贸n b谩sica (Nombre, Tipo estudiante, Modalidad, Fecha, Hora, Tipo registro)</label>
+                                <label for="incluir_basicos">Información básica (Nombre, Tipo estudiante, Modalidad, Fecha, Hora, Tipo registro)</label>
                             </div>
                             <div class="checkbox-item">
                                 <input type="checkbox" id="incluir_intervenciones" name="incluir_campos[]" value="intervenciones" checked>
-                                <label for="incluir_intervenciones">Intervenciones psicol贸gicas y grupos de edad</label>
+                                <label for="incluir_intervenciones">Intervenciones psicológicas y grupos de edad</label>
                             </div>
                             <div class="checkbox-item">
                                 <input type="checkbox" id="incluir_actividades" name="incluir_campos[]" value="actividades" checked>
@@ -128,7 +128,7 @@
                         <select id="filtro_tipo" name="filtro_tipo">
                             <option value="">Todos los tipos</option>
                             <option value="estancia_profesional">Estancia Profesional</option>
-                            <option value="practicas_supervisadas">Pr谩cticas Supervisadas</option>
+                            <option value="practicas_supervisadas">Prácticas Supervisadas</option>
                             <option value="servicio_social">Servicio Social</option>
                         </select>
                     </div>
@@ -148,7 +148,7 @@
                 <div class="status" id="status"></div>
                 
                 <button type="submit" class="submit-btn" id="submit_btn" disabled>
-                    馃敀 Autent铆quese primero para generar reporte
+                    🔒 Autentíquese primero para generar reporte
                 </button>
             </form>
         </div>
@@ -158,16 +158,16 @@
     <div class="modal-overlay" id="modal-overlay">
         <div class="modal">
             <div class="modal-header">
-                <h3>馃搫 Reporte Generado Exitosamente</h3>
+                <h3>📄 Reporte Generado Exitosamente</h3>
                 <button class="modal-close" onclick="closeModal()">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="report-info" id="report-info">
-                    <!-- Se llenar谩 din谩micamente -->
+                    <!-- Se llenará dinámicamente -->
                 </div>
                 <div class="modal-actions">
                     <button class="download-btn" id="download-btn">
-                        馃摜 Descargar Reporte PDF
+                        📥 Descargar Reporte PDF
                     </button>
                     <button class="modal-btn-secondary" onclick="closeModal()">
                         Cerrar
