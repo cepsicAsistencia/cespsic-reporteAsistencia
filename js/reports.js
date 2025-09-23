@@ -61,9 +61,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function initializeApp() {
-    console.log('=== INICIANDO APLICACIÓN CESPSIC REPORTES v.1.0.13 ===');
-    console.log('NOTA: Esta versión usa datos de ejemplo para demostración');
-    console.log('Para conectar datos reales, se necesita resolver problemas de CORS con Google Apps Script');
+    console.log('=== INICIANDO APLICACIÓN CESPSIC REPORTES v.1.0.14 ===');
+    console.log('MODO: Demostración con datos de ejemplo');
+    console.log('Para producción: Configurar conexión a Google Apps Script');
     
     // Verificar scripts inmediatamente
     console.log('Estado de Google:', typeof google);
@@ -96,12 +96,11 @@ function initializeApp() {
         showStatus('Este sistema funciona mejor en Google Chrome. Algunas funciones podrían no estar disponibles.', 'error');
     }
     
-    // Mostrar estado de configuración
+    // Mostrar estado de configuración - SOLO INFORMATIVO
     console.log('Client ID configurado:', GOOGLE_CLIENT_ID ? 'Sí' : 'No');
-    console.log('Script URL configurado:', GOOGLE_SCRIPT_URL !== 'REEMPLAZAR_CON_TU_SCRIPT_URL' ? 'Sí' : 'No');
     console.log('Usuarios autorizados:', AUTHORIZED_USERS.length);
     
-    // Timeout de seguridad - si después de 15 segundos no hay botón, mostrar alternativa
+    // Timeout de seguridad
     setTimeout(() => {
         const container = document.getElementById('signin-button-container');
         if (container && container.innerHTML.includes('Cargando sistema')) {
@@ -135,8 +134,18 @@ function isGoogleChrome() {
 }
 
 function setMaxDate() {
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('fecha_hasta').max = today;
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    
+    // Fecha hasta: hoy
+    document.getElementById('fecha_hasta').max = todayStr;
+    document.getElementById('fecha_hasta').value = todayStr;
+    
+    // Fecha desde: un mes atrás
+    const oneMonthAgo = new Date(today);
+    oneMonthAgo.setMonth(today.getMonth() - 1);
+    const oneMonthAgoStr = oneMonthAgo.toISOString().split('T')[0];
+    document.getElementById('fecha_desde').value = oneMonthAgoStr;
 }
 
 function setupEventListeners() {
@@ -552,26 +561,26 @@ async function handleFormSubmit(e) {
 // ========== DATA FETCHING ==========
 
 async function fetchAttendanceData(fechaDesde, fechaHasta) {
+    console.log('=== MODO DEMOSTRACIÓN - GENERANDO DATOS DE EJEMPLO ===');
+    console.log('Rango de fechas:', fechaDesde, 'al', fechaHasta);
+    console.log('Nota: Esta versión usa datos ficticios para demostración');
+    
     try {
-        console.log('=== GENERANDO DATOS DE EJEMPLO PARA REPORTE ===');
-        console.log('Rango de fechas:', fechaDesde, 'al', fechaHasta);
-        console.log('Nota: Se están usando datos de ejemplo para demostración');
-        
-        // Simular delay de procesamiento
+        // Simular procesamiento de datos
         await new Promise(resolve => setTimeout(resolve, 1500));
         
-        // Generar datos de ejemplo
+        // Generar datos de ejemplo basados en fechas
         attendanceData = generateSampleData(fechaDesde, fechaHasta);
         
-        console.log(`Datos generados: ${attendanceData.length} registros de ejemplo`);
+        console.log(`Registros generados exitosamente: ${attendanceData.length} entradas`);
         
         if (attendanceData.length === 0) {
-            throw new Error('No se generaron registros para el rango de fechas seleccionado');
+            throw new Error('No se encontraron datos para el rango de fechas seleccionado');
         }
         
     } catch (error) {
-        console.error('Error generando datos:', error);
-        throw new Error('No se pudieron generar los datos de ejemplo: ' + error.message);
+        console.error('Error en generación de datos:', error);
+        throw new Error('Error generando datos de demostración: ' + error.message);
     }
 }
 
