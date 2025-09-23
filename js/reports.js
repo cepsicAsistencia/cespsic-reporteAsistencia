@@ -796,7 +796,7 @@ async function generatePDF(fechaDesde, fechaHasta) {
     const isModoEvidencias = incluirCampos.includes('evidencias_solo');
     
     if (isModoEvidencias) {
-        // Configuración especial para modo evidencias con links en la columna
+        // Preparar datos específicamente para modo evidencias
         const headers = getTableHeaders();
         const processedData = [];
         
@@ -804,21 +804,28 @@ async function generatePDF(fechaDesde, fechaHasta) {
             const newRow = [...row];
             // La columna de evidencias está en la posición 6
             if (row[6] && typeof row[6] === 'object' && row[6].links) {
-                // Mostrar solo los links separados por líneas
+                // Convertir los links a texto simple separado por saltos de línea
                 const linksText = row[6].links.map(link => link.url).join('\n');
                 newRow[6] = linksText;
+            } else if (typeof row[6] === 'string') {
+                // Si ya es string, dejarlo como está
+                newRow[6] = row[6];
+            } else {
+                newRow[6] = 'Sin evidencias';
             }
             processedData.push(newRow);
         });
         
-        // Crear tabla con links en la columna
+        // Configurar la tabla con columna de evidencias clickeable
         doc.autoTable({
             head: [headers],
             body: processedData,
             startY: 40,
             styles: {
                 fontSize: 8,
-                cellPadding: 2
+                cellPadding: 2,
+                lineColor: [200, 200, 200],
+                lineWidth: 0.1
             },
             headStyles: {
                 fillColor: [102, 126, 234],
@@ -829,24 +836,32 @@ async function generatePDF(fechaDesde, fechaHasta) {
                 fillColor: [248, 249, 250]
             },
             columnStyles: {
-                6: { cellWidth: 70 } // Columna de evidencias más ancha
+                6: { 
+                    cellWidth: 80, // Columna de evidencias más ancha
+                    fontSize: 7,   // Fuente más pequeña para los links
+                    textColor: [0, 0, 255] // Azul para simular links
+                }
             },
             didDrawCell: function(data) {
-                // Hacer clickeables los links en la columna de evidencias
+                // Hacer los links clickeables en la columna de evidencias
                 if (data.column.index === 6 && data.section === 'body') {
-                    const cellText = data.cell.text;
-                    if (cellText && cellText.length > 0) {
-                        cellText.forEach((line, lineIndex) => {
-                            const text = line.trim();
-                            if (text.startsWith('https://')) {
-                                // Crear área clickeable para cada link
-                                const linkY = data.cell.y + (lineIndex * 3) + 3;
+                    const cellContent = processedData[data.row.index][6];
+                    
+                    if (cellContent && cellContent !== 'Sin evidencias' && cellContent.includes('https://')) {
+                        const links = cellContent.split('\n');
+                        
+                        links.forEach((link, index) => {
+                            if (link.trim().startsWith('https://')) {
+                                // Calcular la posición Y para cada link
+                                const linkY = data.cell.y + (index * 3) + 3;
+                                
+                                // Crear área clickeable para todo el ancho de la celda
                                 doc.link(
-                                    data.cell.x + 2,
+                                    data.cell.x + 1,
                                     linkY - 1,
-                                    data.cell.width - 4,
+                                    data.cell.width - 2,
                                     3,
-                                    { url: text }
+                                    { url: link.trim() }
                                 );
                             }
                         });
@@ -856,7 +871,7 @@ async function generatePDF(fechaDesde, fechaHasta) {
         });
         
     } else {
-        // Modo normal sin links especiales
+        // Modo normal sin modificaciones especiales
         doc.autoTable({
             head: [getTableHeaders()],
             body: tableData,
