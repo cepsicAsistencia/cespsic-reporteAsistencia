@@ -8,7 +8,7 @@ let pdfBlob = null;
 const GOOGLE_CLIENT_ID = '799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.googleusercontent.com';
 const SHEET_ID = '146Q1MG0AUCnzacqrN5kBENRuiql8o07Uts-l_gimL2I';
 
-// URL del Google Apps Script deployment
+// URL del Google Apps Script deployment - ACTUALIZADA
 const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyN49EgjqFoE4Gwos_gnu5lM5XERnGfKejEcI-eVuxb68EgJ4wes2DAorINEZ9xVCI/exec';
 
 // Usuarios autorizados para generar reportes
@@ -532,9 +532,9 @@ function handleEvidenciasChange(checkbox) {
             }
         });
         
-        // Mostrar mensaje informativo
-        showStatus('Modo "Solo Evidencias" activado. Se incluirán únicamente los links a documentos de la columna AI.', 'loading');
-        setTimeout(() => hideStatus(), 4000);
+        // Mostrar mensaje informativo específico
+        showStatus('Modo "Solo Evidencias" activado. Se filtrarán únicamente registros de SALIDA con links a documentos de la columna AI. Los links serán clickeables en el PDF.', 'loading');
+        setTimeout(() => hideStatus(), 6000);
     }
     
     updateCheckboxStyles();
@@ -654,15 +654,29 @@ async function fetchAttendanceData(fechaDesde, fechaHasta) {
     console.log('=== OBTENIENDO DATOS DE ASISTENCIA ===');
     
     try {
+        const incluirCampos = getSelectedFields();
+        const isModoEvidencias = incluirCampos.includes('evidencias_solo');
+        
         const result = await makeBackendRequest('get_attendance_data', {
             fechaDesde: fechaDesde,
             fechaHasta: fechaHasta,
             filtroTipo: document.getElementById('filtro_tipo').value,
-            filtroModalidad: document.getElementById('filtro_modalidad').value
+            filtroModalidad: document.getElementById('filtro_modalidad').value,
+            filtroTipoRegistro: isModoEvidencias ? 'salida' : '', // Nuevo filtro para modo evidencias
+            modoEvidencias: isModoEvidencias // Flag para el backend
         });
         
         if (result.success && result.data) {
             attendanceData = result.data;
+            
+            // Filtro adicional en frontend para modo evidencias
+            if (isModoEvidencias) {
+                attendanceData = attendanceData.filter(record => 
+                    record.tipo_registro && record.tipo_registro.toLowerCase() === 'salida'
+                );
+                console.log(`📋 Modo evidencias activo - Filtrando solo "salidas": ${attendanceData.length} registros`);
+            }
+            
             console.log(`✅ Datos obtenidos: ${attendanceData.length} registros`);
         } else {
             throw new Error(result.message || 'No se pudieron obtener los datos');
@@ -748,8 +762,11 @@ async function generatePDF(fechaDesde, fechaHasta) {
     addPDFHeader(doc, fechaDesde, fechaHasta);
     
     const tableData = prepareTableData();
+    const incluirCampos = getSelectedFields();
+    const isModoEvidencias = incluirCampos.includes('evidencias_solo');
     
-    doc.autoTable({
+    // Configuración especial para tabla con links
+    const tableConfig = {
         head: [getTableHeaders()],
         body: tableData,
         startY: 40,
@@ -764,8 +781,65 @@ async function generatePDF(fechaDesde, fechaHasta) {
         },
         alternateRowStyles: {
             fillColor: [248, 249, 250]
-        }
-    });
+        },
+        columnStyles: {}
+    };
+    
+    // Si es modo evidencias, configurar la columna de links
+    if (isModoEvidencias) {
+        tableConfig.columnStyles[6] = { cellWidth: 60 }; // Columna de evidencias más ancha
+        
+        // Hook personalizado para manejar links
+        tableConfig.didDrawCell = function(data) {
+            if (data.column.index === 6 && data.section === 'body') { // Columna de evidencias
+                const cellData = tableData[data.row.index][6];
+                
+                if (cellData && typeof cellData === 'object' && cellData.links) {
+                    const links = cellData.links;
+                    
+                    // Agregar links clickeables
+                    links.forEach((link, index) => {
+                        const linkY = data.cell.y + (index + 1) * 3 + 2;
+                        
+                        // Agregar el link como texto clickeable
+                        doc.setTextColor(0, 0, 255); // Azul para links
+                        doc.setFont('helvetica', 'underline');
+                        doc.text(link.text, data.cell.x + 2, linkY);
+                        
+                        // Crear área clickeable
+                        doc.link(
+                            data.cell.x + 2, 
+                            linkY - 2, 
+                            doc.getTextWidth(link.text), 
+                            3, 
+                            { url: link.url }
+                        );
+                        
+                        // Restaurar estilo de texto
+                        doc.setTextColor(0, 0, 0);
+                        doc.setFont('helvetica', 'normal');
+                    });
+                    
+                    // No mostrar el texto original en la celda
+                    return false;
+                }
+            }
+        };
+        
+        // Procesar datos para modo evidencias
+        tableConfig.body = tableData.map(row => {
+            const newRow = [...row];
+            if (row[6] && typeof row[6] === 'object' && row[6].links) {
+                // Reemplazar objeto con texto simple para la tabla
+                newRow[6] = row[6].links.length > 0 ? 
+                    `${row[6].links.length} evidencia(s) - Ver links` : 
+                    'Sin evidencias';
+            }
+            return newRow;
+        });
+    }
+    
+    doc.autoTable(tableConfig);
     
     addPDFFooter(doc);
     pdfBlob = doc.output('blob');
@@ -846,8 +920,12 @@ function prepareTableData() {
         ];
         
         if (incluirCampos.includes('evidencias_solo')) {
-            // Solo evidencias: agregar links de documentos
-            row.push(record.links_evidencias || 'Sin evidencias');
+            // Solo evidencias: agregar links de documentos como enlaces clickeables
+            const linksText = record.links_evidencias || 'Sin evidencias';
+            row.push({
+                content: linksText,
+                links: linksText !== 'Sin evidencias' ? parseLinksFromText(linksText) : []
+            });
         } else {
             // Modo normal: agregar campos según selección
             if (incluirCampos.includes('intervenciones')) {
@@ -890,6 +968,17 @@ function prepareTableData() {
         
         return row;
     });
+}
+
+function parseLinksFromText(linksText) {
+    // Extraer URLs del texto
+    const urlRegex = /(https?:\/\/[^\s,]+)/g;
+    const urls = linksText.match(urlRegex) || [];
+    
+    return urls.map((url, index) => ({
+        url: url.trim(),
+        text: `Evidencia ${index + 1}`
+    }));
 }
 
 function getSelectedFields() {
@@ -961,4 +1050,3 @@ function hideStatus() {
     const status = document.getElementById('status');
     status.style.display = 'none';
 }
-Claude
