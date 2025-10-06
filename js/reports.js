@@ -14,8 +14,9 @@ const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyN49EgjqFoE4
 // Usuarios autorizados para generar reportes
 const AUTHORIZED_USERS = [
     'jose.lino.flores.madrigal@gmail.com',
-    'CEPSIC.atencionpsicologica@gmail.com',
-    'adilene.example@gmail.com' // REEMPLAZAR con el email completo de Adilene
+    'cepsic.atencionpsicologica@gmail.com',
+    'adymadrid.22@gmail.com',
+    'cespsic@uas.edu.mx'
 ];
 
 // Estado de autenticación
