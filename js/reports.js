@@ -150,7 +150,7 @@ async function checkBackendAvailability() {
 async function handleCredentialResponse(response) {
     try {
         authenticationAttempts++;
-        console.log(`🔐 Procesando autenticación (intento ${authenticationAttempts})...`);
+        console.log(`🔑 Procesando autenticación (intento ${authenticationAttempts})...`);
         
         if (authenticationAttempts > MAX_AUTH_ATTEMPTS) {
             showStatus('Demasiados intentos de autenticación. Recargue la página.', 'error');
@@ -319,9 +319,6 @@ function updateAdminControls() {
             }
         } else {
             adminControls.style.display = 'none';
-            
-            // Para usuarios normales, establecer orden por fecha por defecto
-            // Esto se manejará en fetchAttendanceData cuando no haya ordenamiento seleccionado
         }
     }
 }
@@ -468,7 +465,7 @@ function updateAuthenticationUI() {
         signinContainer.style.display = 'none';
     } else {
         authSection.classList.remove('authenticated');
-        authTitle.textContent = '🔐 Autenticación Requerida';
+        authTitle.textContent = '🔒 Autenticación Requerida';
         authTitle.classList.remove('authenticated');
         userInfo.classList.remove('show');
         signinContainer.style.display = 'block';
@@ -890,9 +887,11 @@ async function fetchAttendanceData(fechaDesde, fechaHasta) {
 // ========== PDF GENERATION ==========
 async function generatePDF(fechaDesde, fechaHasta) {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF('l', 'mm', 'a4');
+    // Cambiar a tamaño Legal (landscape)
+    const doc = new jsPDF('l', 'mm', 'legal');
     
-    doc.setFont('helvetica');
+    // Usar Times como alternativa a Georgia
+    doc.setFont('times');
     addPDFHeader(doc, fechaDesde, fechaHasta);
     
     const tableData = prepareTableData();
@@ -918,27 +917,35 @@ async function generatePDF(fechaDesde, fechaHasta) {
             body: processedData,
             startY: 40,
             styles: {
-                fontSize: 7,
-                cellPadding: 2,
+                fontSize: 8,
+                font: 'times',
+                cellPadding: 1.5,
                 lineColor: [200, 200, 200],
                 lineWidth: 0.1
             },
             headStyles: {
                 fillColor: [102, 126, 234],
                 textColor: 255,
-                fontStyle: 'bold'
+                fontStyle: 'bold',
+                fontSize: 8
             },
             alternateRowStyles: {
                 fillColor: [248, 249, 250]
             },
             columnStyles: {
-                6: { cellWidth: 40 },
-                7: { cellWidth: 35 },
+                0: { cellWidth: 50 }, // Nombre Completo - más ancho
+                1: { cellWidth: 25 }, // Tipo Estudiante
+                2: { cellWidth: 22 }, // Modalidad
+                3: { cellWidth: 22 }, // Fecha
+                4: { cellWidth: 15 }, // Hora
+                5: { cellWidth: 20 }, // Tipo Registro
+                6: { cellWidth: 40 }, // Nombres Evidencias
+                7: { cellWidth: 35 }, // Carpeta
                 8: { 
-                    cellWidth: 65,
-                    fontSize: 6,
+                    cellWidth: 50,
+                    fontSize: 7,
                     textColor: [0, 0, 255]
-                }
+                } // Links
             },
             didDrawCell: function(data) {
                 if (data.column.index === 8 && data.section === 'body') {
@@ -966,22 +973,30 @@ async function generatePDF(fechaDesde, fechaHasta) {
         });
         
     } else {
+        // Calcular anchos de columna dinámicamente según el orden
+        const columnWidths = calculateColumnWidths(selectedSortOrder, incluirCampos);
+        
         doc.autoTable({
             head: [getTableHeaders()],
             body: tableData,
             startY: 40,
             styles: {
                 fontSize: 8,
-                cellPadding: 2
+                font: 'times',
+                cellPadding: 1.5,
+                lineColor: [200, 200, 200],
+                lineWidth: 0.1
             },
             headStyles: {
                 fillColor: [102, 126, 234],
                 textColor: 255,
-                fontStyle: 'bold'
+                fontStyle: 'bold',
+                fontSize: 8
             },
             alternateRowStyles: {
                 fillColor: [248, 249, 250]
-            }
+            },
+            columnStyles: columnWidths
         });
     }
     
@@ -991,12 +1006,12 @@ async function generatePDF(fechaDesde, fechaHasta) {
 
 function addPDFHeader(doc, fechaDesde, fechaHasta) {
     doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('REPORTE DE ASISTENCIAS - CESPSIC', 148, 15, { align: 'center' });
+    doc.setFont('times', 'bold');
+    doc.text('REPORTE DE ASISTENCIAS - CESPSIC', 178, 15, { align: 'center' }); // Centrado para Legal
     
     doc.setFontSize(12);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Período: ${fechaDesde} al ${fechaHasta}`, 148, 25, { align: 'center' });
+    doc.setFont('times', 'normal');
+    doc.text(`Período: ${fechaDesde} al ${fechaHasta}`, 178, 25, { align: 'center' });
     
     // Información adicional para admins
     const filtroUsuario = currentUser.isAdmin ? (document.getElementById('filtro_usuario')?.value || '') : '';
@@ -1004,7 +1019,7 @@ function addPDFHeader(doc, fechaDesde, fechaHasta) {
         ? usersList.find(u => u.email === filtroUsuario)?.nombre || filtroUsuario
         : '';
     
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     let roleText = currentUser.isAdmin 
         ? (filtroUsuario ? `(Admin - Usuario: ${usuarioNombre})` : '(Administrador - Todos los registros)')
         : '(Usuario - Registros propios)';
@@ -1020,11 +1035,11 @@ function addPDFHeader(doc, fechaDesde, fechaHasta) {
             'modalidad': 'Modalidad',
             'tipo_registro': 'Tipo de Registro'
         };
-        doc.text(`Ordenado por: ${ordenTexto[selectedSortOrder] || selectedSortOrder}`, 200, 32);
+        doc.text(`Ordenado por: ${ordenTexto[selectedSortOrder] || selectedSortOrder}`, 270, 32);
     } else if (!currentUser.isAdmin) {
-        doc.text(`Ordenado por: Fecha`, 200, 32);
+        doc.text(`Ordenado por: Fecha`, 270, 32);
     } else {
-        doc.text(`Fecha: ${new Date().toLocaleString('es-MX')}`, 200, 32);
+        doc.text(`Fecha: ${new Date().toLocaleString('es-MX')}`, 270, 32);
     }
     
     doc.text(`Total registros: ${attendanceData.length}`, 10, 37);
@@ -1038,11 +1053,108 @@ function addPDFFooter(doc) {
         doc.setFontSize(8);
         doc.text(
             `Página ${i} de ${pageCount} - CESPSIC`,
-            148,
+            178, // Ajustado para Legal
             205,
             { align: 'center' }
         );
     }
+}
+
+// Función para calcular anchos de columna según el orden seleccionado
+function calculateColumnWidths(sortOrder, incluirCampos) {
+    const widths = {};
+    let colIndex = 0;
+    
+    // Tamaño de página Legal landscape: 355.6mm de ancho
+    // Columnas básicas según orden
+    const basicColumns = {
+        nombre: 55,        // Nombre - más ancho
+        fecha: 22,         // Fecha
+        tipo_registro: 20, // Tipo Registro  
+        modalidad: 22,     // Modalidad
+        tipo_estudiante: 30, // Tipo Estudiante
+        hora: 15           // Hora
+    };
+    
+    // Asignar anchos según el orden seleccionado
+    switch (sortOrder) {
+        case 'nombre':
+            widths[colIndex++] = { cellWidth: basicColumns.nombre };
+            widths[colIndex++] = { cellWidth: basicColumns.fecha };
+            widths[colIndex++] = { cellWidth: basicColumns.tipo_registro };
+            widths[colIndex++] = { cellWidth: basicColumns.modalidad };
+            widths[colIndex++] = { cellWidth: basicColumns.tipo_estudiante };
+            widths[colIndex++] = { cellWidth: basicColumns.hora };
+            break;
+        case 'tipo_estudiante':
+            widths[colIndex++] = { cellWidth: basicColumns.tipo_estudiante };
+            widths[colIndex++] = { cellWidth: basicColumns.nombre };
+            widths[colIndex++] = { cellWidth: basicColumns.fecha };
+            widths[colIndex++] = { cellWidth: basicColumns.tipo_registro };
+            widths[colIndex++] = { cellWidth: basicColumns.modalidad };
+            widths[colIndex++] = { cellWidth: basicColumns.hora };
+            break;
+        case 'fecha':
+            widths[colIndex++] = { cellWidth: basicColumns.fecha };
+            widths[colIndex++] = { cellWidth: basicColumns.nombre };
+            widths[colIndex++] = { cellWidth: basicColumns.tipo_registro };
+            widths[colIndex++] = { cellWidth: basicColumns.tipo_estudiante };
+            widths[colIndex++] = { cellWidth: basicColumns.modalidad };
+            widths[colIndex++] = { cellWidth: basicColumns.hora };
+            break;
+        case 'modalidad':
+            widths[colIndex++] = { cellWidth: basicColumns.modalidad };
+            widths[colIndex++] = { cellWidth: basicColumns.nombre };
+            widths[colIndex++] = { cellWidth: basicColumns.fecha };
+            widths[colIndex++] = { cellWidth: basicColumns.tipo_registro };
+            widths[colIndex++] = { cellWidth: basicColumns.tipo_estudiante };
+            widths[colIndex++] = { cellWidth: basicColumns.hora };
+            break;
+        case 'tipo_registro':
+            widths[colIndex++] = { cellWidth: basicColumns.tipo_registro };
+            widths[colIndex++] = { cellWidth: basicColumns.nombre };
+            widths[colIndex++] = { cellWidth: basicColumns.fecha };
+            widths[colIndex++] = { cellWidth: basicColumns.modalidad };
+            widths[colIndex++] = { cellWidth: basicColumns.tipo_estudiante };
+            widths[colIndex++] = { cellWidth: basicColumns.hora };
+            break;
+        default:
+            widths[colIndex++] = { cellWidth: basicColumns.nombre };
+            widths[colIndex++] = { cellWidth: basicColumns.tipo_estudiante };
+            widths[colIndex++] = { cellWidth: basicColumns.modalidad };
+            widths[colIndex++] = { cellWidth: basicColumns.fecha };
+            widths[colIndex++] = { cellWidth: basicColumns.hora };
+            widths[colIndex++] = { cellWidth: basicColumns.tipo_registro };
+    }
+    
+    // Columnas opcionales con anchos más pequeños
+    if (incluirCampos.includes('intervenciones')) {
+        widths[colIndex++] = { cellWidth: 14 }; // Interv.
+        widths[colIndex++] = { cellWidth: 12 }; // Niños
+        widths[colIndex++] = { cellWidth: 12 }; // Adoles.
+        widths[colIndex++] = { cellWidth: 12 }; // Adult.
+        widths[colIndex++] = { cellWidth: 12 }; // >60
+        widths[colIndex++] = { cellWidth: 12 }; // Fam.
+    }
+    
+    if (incluirCampos.includes('actividades')) {
+        widths[colIndex++] = { cellWidth: 45 }; // Actividades
+    }
+    
+    if (incluirCampos.includes('evidencias')) {
+        widths[colIndex++] = { cellWidth: 15 }; // Total Ev.
+    }
+    
+    if (incluirCampos.includes('comentarios')) {
+        widths[colIndex++] = { cellWidth: 40 }; // Comentarios
+    }
+    
+    if (incluirCampos.includes('permisos')) {
+        widths[colIndex++] = { cellWidth: 30 }; // Det. Permiso
+        widths[colIndex++] = { cellWidth: 30 }; // Det. Otro
+    }
+    
+    return widths;
 }
 
 function getTableHeaders() {
@@ -1059,45 +1171,39 @@ function getTableHeaders() {
         // Orden según criterio seleccionado
         switch (selectedSortOrder) {
             case 'nombre':
-                // Nombre, Fecha, Tipo Registro, Modalidad, Tipo Estudiante
                 basicHeaders = ['Nombre Completo', 'Fecha', 'Tipo Registro', 'Modalidad', 'Tipo Estudiante', 'Hora'];
                 break;
             case 'tipo_estudiante':
-                // Tipo Estudiante, Nombre, Fecha, Tipo Registro, Modalidad
                 basicHeaders = ['Tipo Estudiante', 'Nombre Completo', 'Fecha', 'Tipo Registro', 'Modalidad', 'Hora'];
                 break;
             case 'fecha':
-                // Fecha, Nombre, Tipo Registro, Tipo Estudiante, Modalidad
                 basicHeaders = ['Fecha', 'Nombre Completo', 'Tipo Registro', 'Tipo Estudiante', 'Modalidad', 'Hora'];
                 break;
             case 'modalidad':
-                // Modalidad, Nombre, Fecha, Tipo Registro, Tipo Estudiante
                 basicHeaders = ['Modalidad', 'Nombre Completo', 'Fecha', 'Tipo Registro', 'Tipo Estudiante', 'Hora'];
                 break;
             case 'tipo_registro':
-                // Tipo Registro, Nombre, Fecha, Modalidad, Tipo Estudiante
                 basicHeaders = ['Tipo Registro', 'Nombre Completo', 'Fecha', 'Modalidad', 'Tipo Estudiante', 'Hora'];
                 break;
             default:
-                // Orden por defecto
                 basicHeaders = ['Nombre Completo', 'Tipo Estudiante', 'Modalidad', 'Fecha', 'Hora', 'Tipo Registro'];
         }
         
-        // Agregar columnas opcionales
+        // Agregar columnas opcionales con encabezados ABREVIADOS
         if (incluirCampos.includes('intervenciones')) {
-            basicHeaders.push('Intervenciones', 'Niños', 'Adolescentes', 'Adultos', 'Mayores 60', 'Familia');
+            basicHeaders.push('Interv.', 'Niños', 'Adoles.', 'Adult.', '>60', 'Fam.');
         }
         if (incluirCampos.includes('actividades')) {
             basicHeaders.push('Actividades');
         }
         if (incluirCampos.includes('evidencias')) {
-            basicHeaders.push('Total Evidencias');
+            basicHeaders.push('Total Ev.');
         }
         if (incluirCampos.includes('comentarios')) {
             basicHeaders.push('Comentarios');
         }
         if (incluirCampos.includes('permisos')) {
-            basicHeaders.push('Detalle Permiso', 'Detalle Otro');
+            basicHeaders.push('Det. Permiso', 'Det. Otro');
         }
     }
     
@@ -1133,7 +1239,6 @@ function prepareTableData() {
             // Orden básico según criterio seleccionado
             switch (selectedSortOrder) {
                 case 'nombre':
-                    // Nombre, Fecha, Tipo Registro, Modalidad, Tipo Estudiante, Hora
                     row = [
                         nombreCompleto,
                         record.fecha || '',
@@ -1144,7 +1249,6 @@ function prepareTableData() {
                     ];
                     break;
                 case 'tipo_estudiante':
-                    // Tipo Estudiante, Nombre, Fecha, Tipo Registro, Modalidad, Hora
                     row = [
                         record.tipo_estudiante || '',
                         nombreCompleto,
@@ -1155,7 +1259,6 @@ function prepareTableData() {
                     ];
                     break;
                 case 'fecha':
-                    // Fecha, Nombre, Tipo Registro, Tipo Estudiante, Modalidad, Hora
                     row = [
                         record.fecha || '',
                         nombreCompleto,
@@ -1166,7 +1269,6 @@ function prepareTableData() {
                     ];
                     break;
                 case 'modalidad':
-                    // Modalidad, Nombre, Fecha, Tipo Registro, Tipo Estudiante, Hora
                     row = [
                         record.modalidad || '',
                         nombreCompleto,
@@ -1177,7 +1279,6 @@ function prepareTableData() {
                     ];
                     break;
                 case 'tipo_registro':
-                    // Tipo Registro, Nombre, Fecha, Modalidad, Tipo Estudiante, Hora
                     row = [
                         record.tipo_registro || '',
                         nombreCompleto,
@@ -1188,7 +1289,6 @@ function prepareTableData() {
                     ];
                     break;
                 default:
-                    // Orden por defecto
                     row = [
                         nombreCompleto,
                         record.tipo_estudiante || '',
