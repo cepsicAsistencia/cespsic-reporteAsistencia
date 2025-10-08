@@ -13,7 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     
-    <!-- Verificación de carga de scripts -->
+    <!-- Verificacion de carga de scripts -->
     <script>
         window.addEventListener('load', function() {
             console.log('Verificando scripts cargados:');
@@ -32,38 +32,40 @@
             <div class="logos">
                 <img src="https://lh3.googleusercontent.com/d/19ybSSXzb1ko_982HrRi7Kd7dPfN8Peuc" alt="UAS" class="logo">
                 <img src="https://lh3.googleusercontent.com/d/12tYxfzWgy3BVYjadXOEKlX5-uSsxIrBt" alt="CESPSIC" class="logo">
-                <img src="https://lh3.googleusercontent.com/d/1tR9QzPGbydb_qjDkZOKsoNU6_xIBGQP2" alt="Facultad de Psicología" class="logo">
+                <img src="https://lh3.googleusercontent.com/d/1tR9QzPGbydb_qjDkZOKsoNU6_xIBGQP2" alt="Facultad de Psicologia" class="logo">
             </div>
-            <h1>Generador de Reportes de Asistencia - Centro de Servicios Psicológicos (CESPSIC) v.1.0.36</h1>
+            <h1>Generador de Reportes de Asistencia - Centro de Servicios Psicologicos (CESPSIC) v.3.0</h1>
         </div>
 
-        <!-- Sección de Autenticación -->
+        <!-- Seccion de Autenticacion -->
         <div class="auth-section" id="auth-section">
             <div class="auth-title" id="auth-title">
-                🔒 Autenticación Administrativa Requerida
+                🔐 Autenticación Requerida
             </div>
             
             <div class="auth-warning">
-                ⚠️ Solo administradores autorizados pueden generar reportes de asistencia
+                ℹ️ Sistema Multi-Rol: Todos los usuarios pueden acceder
             </div>
             
-            <!-- Información del usuario autenticado -->
+            <!-- Informacion del usuario autenticado -->
             <div class="user-info" id="user-info">
                 <img id="user-avatar" class="user-avatar" src="" alt="Avatar">
                 <div class="user-email" id="user-email"></div>
                 <div class="user-name" id="user-name"></div>
                 <div class="user-status" id="user-status">✅ Usuario Autorizado</div>
-                <button class="signout-btn" onclick="signOut()">🚪 Cerrar Sesión</button>
+                <button class="signout-btn" onclick="signOut()">🚪 Cerrar Sesion</button>
             </div>
             
-            <!-- Botón de inicio de sesión con Google -->
+            <!-- Boton de inicio de sesion con Google -->
             <div id="signin-button-container">
-                <!-- El botón se genera automáticamente por Google Sign-In API -->
+                <!-- El boton se genera automaticamente por Google Sign-In API -->
             </div>
             
             <div class="auth-info" style="margin-top: 15px; padding: 10px; background: #e3f2fd; border-radius: 8px; font-size: 14px; color: #1565c0;">
-                🔐 <strong>Nota:</strong> Solo usuarios autorizados pueden acceder a esta funcionalidad.
-                <br>🏢 <strong>Acceso:</strong> Restringido a administradores de CESPSIC.
+                ℹ️ <strong>Nota:</strong> Este sistema tiene dos tipos de acceso:
+                <br>👑 <strong>Administradores:</strong> Pueden ver todos los registros del sistema
+                <br>👤 <strong>Usuarios:</strong> Solo pueden ver sus propios registros de asistencia
+                <br><br>✅ Todos los usuarios con cuenta de Gmail verificada pueden autenticarse
             </div>
         </div>
 
@@ -73,8 +75,44 @@
                 <div class="form-section">
                     <h2>📋 Generar Reporte de Asistencias</h2>
                     <p class="form-description">
-                        Seleccione el rango de fechas para generar el reporte PDF con todas las asistencias registradas.
+                        Seleccione el rango de fechas para generar el reporte PDF con las asistencias registradas.
                     </p>
+                </div>
+
+                <!-- CONTROLES SOLO PARA ADMINISTRADORES -->
+                <div id="admin-controls" style="display: none;">
+                    <div class="form-section" style="background: #fff9e6; border-left: 4px solid #ffc107; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <h3 style="color: #856404; font-size: 1.1em; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+                            👑 Controles de Administrador
+                        </h3>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="filtro_usuario">Filtrar por usuario específico:</label>
+                                <select id="filtro_usuario" name="filtro_usuario">
+                                    <option value="">Todos los usuarios</option>
+                                    <!-- Se llenará dinámicamente con JavaScript -->
+                                </select>
+                                <small style="color: #666; display: block; margin-top: 5px;">
+                                    💡 Dejar en "Todos" para ver registros de todos los usuarios
+                                </small>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="ordenar_por">Ordenar información por:</label>
+                                <select id="ordenar_por" name="ordenar_por">
+                                    <option value="nombre" selected>Nombre</option>
+                                    <option value="fecha">Fecha</option>
+                                    <option value="tipo_estudiante">Tipo de Estudiante</option>
+                                    <option value="modalidad">Modalidad</option>
+                                    <option value="tipo_registro">Tipo de Registro</option>
+                                </select>
+                                <small style="color: #666; display: block; margin-top: 5px;">
+                                    📊 El orden de las columnas del PDF se ajustará según su elección
+                                </small>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="form-section">
@@ -96,7 +134,7 @@
                         <div class="checkbox-group">
                             <div class="checkbox-item">
                                 <input type="checkbox" id="incluir_basicos" name="incluir_campos[]" value="basicos" checked disabled>
-                                <label for="incluir_basicos">Información básica (Nombre, Tipo estudiante, Modalidad, Fecha, Hora, Tipo registro)</label>
+                                <label for="incluir_basicos">Informacion basica (Nombre, Tipo estudiante, Modalidad, Fecha, Hora, Tipo registro)</label>
                             </div>
                             
                             <!-- Checkbox especial para Evidencias -->
@@ -104,7 +142,7 @@
                                 <input type="checkbox" id="incluir_evidencias_solo" name="incluir_campos[]" value="evidencias_solo" onchange="handleEvidenciasChange(this)">
                                 <label for="incluir_evidencias_solo">
                                     <strong>Solo Evidencias de Salida</strong>
-                                    <br><small style="color: #666;">Filtra únicamente registros de SALIDA.</small>
+                                    <br><small style="color: #666;">Filtra unicamente registros de SALIDA con links clickeables.</small>
                                 </label>
                             </div>
                             
@@ -112,7 +150,7 @@
                             
                             <div class="checkbox-item">
                                 <input type="checkbox" id="incluir_intervenciones" name="incluir_campos[]" value="intervenciones" checked>
-                                <label for="incluir_intervenciones">Intervenciones psicológicas y grupos de edad</label>
+                                <label for="incluir_intervenciones">Intervenciones psicologicas y grupos de edad</label>
                             </div>
                             <div class="checkbox-item">
                                 <input type="checkbox" id="incluir_actividades" name="incluir_campos[]" value="actividades" checked>
@@ -140,7 +178,7 @@
                         <select id="filtro_tipo" name="filtro_tipo">
                             <option value="">Todos los tipos</option>
                             <option value="estancia_profesional">Estancia Profesional</option>
-                            <option value="practicas_supervisadas">Prácticas Supervisadas</option>
+                            <option value="practicas_supervisadas">Practicas Supervisadas</option>
                             <option value="servicio_social">Servicio Social</option>
                         </select>
                     </div>
@@ -175,11 +213,11 @@
             </div>
             <div class="modal-body">
                 <div class="report-info" id="report-info">
-                    <!-- Se llenará dinámicamente -->
+                    <!-- Se llenara dinamicamente -->
                 </div>
                 <div class="modal-actions">
                     <button class="download-btn" id="download-btn">
-                        📥 Descargar Reporte PDF
+                        ⬇️ Descargar Reporte PDF
                     </button>
                     <button class="modal-btn-secondary" onclick="closeModal()">
                         Cerrar
@@ -191,9 +229,8 @@
 
     <!-- JavaScript -->
     <script>
-        // Función global para manejar el checkbox de evidencias
+        // Funcion global para manejar el checkbox de evidencias
         function handleEvidenciasChange(checkbox) {
-            // Esta función se implementará en reports.js
             if (typeof window.handleEvidenciasChange === 'function') {
                 window.handleEvidenciasChange(checkbox);
             }
