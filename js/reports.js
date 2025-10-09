@@ -277,9 +277,16 @@ async function loadUsersList(fechaDesde = null, fechaHasta = null) {
 function updateAdminControls() {
     // Mostrar/ocultar controles según el rol
     const adminControls = document.getElementById('admin-controls');
+    const adminEvidenciasControl = document.getElementById('admin-evidencias-control');
+    
     if (adminControls) {
         if (currentUser.isAdmin) {
             adminControls.style.display = 'block';
+            
+            // Mostrar checkbox de evidencias solo para admins
+            if (adminEvidenciasControl) {
+                adminEvidenciasControl.style.display = 'block';
+            }
             
             // Llenar el combo de usuarios
             const userSelect = document.getElementById('filtro_usuario');
@@ -319,6 +326,18 @@ function updateAdminControls() {
             }
         } else {
             adminControls.style.display = 'none';
+            
+            // Ocultar checkbox de evidencias para usuarios normales
+            if (adminEvidenciasControl) {
+                adminEvidenciasControl.style.display = 'none';
+                
+                // Desmarcar el checkbox si estaba marcado
+                const evidenciasSoloCheckbox = document.getElementById('incluir_evidencias_solo');
+                if (evidenciasSoloCheckbox && evidenciasSoloCheckbox.checked) {
+                    evidenciasSoloCheckbox.checked = false;
+                    updateCheckboxStyles();
+                }
+            }
         }
     }
 }
@@ -493,6 +512,7 @@ function updateFormDescription() {
             description.innerHTML = `
                 <strong>👑 Modo Administrador:</strong> Puede generar reportes con todos los registros del sistema o filtrar por usuario específico.
                 <br>Seleccione el rango de fechas y los usuarios disponibles se actualizarán automáticamente.
+                <br><strong>🔒 Función exclusiva:</strong> Tiene acceso al modo "Solo Evidencias de Salida" para filtrar registros con links.
                 <br><strong>💡 Ordenamiento por defecto:</strong> Nombre (puede cambiarlo en los controles de administrador).
             `;
             description.style.borderLeftColor = '#ffc107';
