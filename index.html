@@ -138,12 +138,15 @@
                             </div>
                             
                             <!-- Checkbox especial para Evidencias -->
-                            <div class="checkbox-item checkbox-evidencias">
-                                <input type="checkbox" id="incluir_evidencias_solo" name="incluir_campos[]" value="evidencias_solo" onchange="handleEvidenciasChange(this)">
-                                <label for="incluir_evidencias_solo">
-                                    <strong>Solo Evidencias de Salida</strong>
-                                    <br><small style="color: #666;">Filtra unicamente registros de SALIDA con links clickeables.</small>
-                                </label>
+                            <!-- Checkbox especial para Evidencias (SOLO ADMINISTRADORES) -->
+                            <div id="admin-evidencias-control" style="display: none;">
+                                <div class="checkbox-item checkbox-evidencias">
+                                    <input type="checkbox" id="incluir_evidencias_solo" name="incluir_campos[]" value="evidencias_solo" onchange="handleEvidenciasChange(this)">
+                                    <label for="incluir_evidencias_solo">
+                                        <strong>🔒 Solo Evidencias de Salida (Admin)</strong>
+                                        <br><small style="color: #666;">Filtra únicamente registros de SALIDA con links clickeables.</small>
+                                    </label>
+                                </div>
                             </div>
                             
                             <hr style="border: none; border-top: 1px solid #eee; margin: 15px 0;">
