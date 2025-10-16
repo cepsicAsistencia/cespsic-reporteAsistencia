@@ -13,16 +13,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     
-    <!-- Verificación de carga de scripts -->
-    <script>
-        window.addEventListener('load', function() {
-            console.log('Verificando scripts cargados:');
-            console.log('- Google API:', typeof google !== 'undefined' ? 'Cargado' : 'No cargado');
-            console.log('- jsPDF:', typeof window.jspdf !== 'undefined' ? 'Cargado' : 'No cargado');
-            console.log('- Script principal:', typeof initializeApp !== 'undefined' ? 'Cargado' : 'NO CARGADO - REVISAR js/reports.js');
-        });
-    </script>
-    
     <!-- CSS -->
     <link rel="stylesheet" href="css/styles.css">
 </head>
@@ -34,7 +24,7 @@
                 <img src="https://lh3.googleusercontent.com/d/12tYxfzWgy3BVYjadXOEKlX5-uSsxIrBt" alt="CESPSIC" class="logo">
                 <img src="https://lh3.googleusercontent.com/d/1tR9QzPGbydb_qjDkZOKsoNU6_xIBGQP2" alt="Facultad de Psicología" class="logo">
             </div>
-            <h1>Generador de Reportes de Asistencia - Centro de Servicios Psicológicos (CESPSIC) v.4.0.01</h1>
+            <h1>Generador de Reportes de Asistencia - Centro de Servicios Psicológicos (CESPSIC) v.4.1</h1>
         </div>
 
         <!-- Sección de Autenticación -->
@@ -90,6 +80,48 @@
                     </div>
                 </div>
 
+                <!-- NUEVA SECCIÓN: Controles de Administrador -->
+                <div class="form-section admin-section" id="admin-controls-section" style="display: none;">
+                    <h3 style="color: #764ba2; font-size: 1.1em; margin-bottom: 15px;">
+                        👑 Controles de Administrador
+                    </h3>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="filtro_usuario">
+                                Filtrar por Usuario (opcional):
+                                <span style="font-size: 0.85em; color: #666; font-weight: normal;">
+                                    Se actualiza según el rango de fechas
+                                </span>
+                            </label>
+                            <select id="filtro_usuario" name="filtro_usuario">
+                                <option value="">Todos los usuarios</option>
+                                <!-- Se llena dinámicamente según el rango de fechas -->
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="orden_datos">
+                                Ordenar datos por:
+                                <span style="font-size: 0.85em; color: #666; font-weight: normal;">
+                                    Define el orden de los registros en el PDF
+                                </span>
+                            </label>
+                            <select id="orden_datos" name="orden_datos">
+                                <option value="nombre">Nombre (nombre, fecha, tipo, modalidad, registro)</option>
+                                <option value="fecha">Fecha (fecha, tipo, modalidad, nombre, registro)</option>
+                                <option value="tipo_estudiante">Tipo de Estudiante (tipo, fecha, modalidad, nombre, registro)</option>
+                                <option value="modalidad">Modalidad (modalidad, tipo, fecha, nombre, registro)</option>
+                                <option value="tipo_registro">Tipo de Registro (registro, fecha, tipo, modalidad, nombre)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="admin-info" style="background: #f3e5f5; border-left: 4px solid #764ba2; padding: 12px; border-radius: 6px; margin-top: 10px;">
+                        <strong>ℹ️ Información:</strong> Estos controles solo están disponibles para administradores y permiten filtrar y ordenar los datos de manera avanzada.
+                    </div>
+                </div>
+
                 <div class="form-section">
                     <div class="form-group">
                         <label for="incluir_campos">Campos a incluir en el reporte:</label>
@@ -99,12 +131,12 @@
                                 <label for="incluir_basicos">Información básica (Nombre, Tipo estudiante, Modalidad, Fecha, Hora, Tipo registro)</label>
                             </div>
                             
-                            <!-- Checkbox especial para Evidencias -->
-                            <div class="checkbox-item checkbox-evidencias">
+                            <!-- Checkbox especial para Evidencias - SOLO ADMINISTRADORES -->
+                            <div class="checkbox-item checkbox-evidencias" style="display: none;">
                                 <input type="checkbox" id="incluir_evidencias_solo" name="incluir_campos[]" value="evidencias_solo" onchange="handleEvidenciasChange(this)">
                                 <label for="incluir_evidencias_solo">
-                                    <strong>Solo Evidencias de Salida</strong>
-                                    <br><small style="color: #666;">Filtra únicamente registros de SALIDA.</small>
+                                    <strong>👑 Solo Evidencias de Salida (Administradores)</strong>
+                                    <br><small style="color: #666;">Filtra únicamente registros de SALIDA con links clickeables a archivos de Drive.</small>
                                 </label>
                             </div>
                             
@@ -193,7 +225,6 @@
     <script>
         // Función global para manejar el checkbox de evidencias
         function handleEvidenciasChange(checkbox) {
-            // Esta función se implementará en reports.js
             if (typeof window.handleEvidenciasChange === 'function') {
                 window.handleEvidenciasChange(checkbox);
             }
