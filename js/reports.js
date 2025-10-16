@@ -1,11 +1,8 @@
 // Variables globales
 let isAuthenticated = false;
 let currentUser = null;
-let userRole = null; // 'admin' o 'user'
 let attendanceData = [];
 let pdfBlob = null;
-let usersList = []; // Lista de usuarios para admins
-let selectedSortOrder = ''; // Criterio de ordenamiento seleccionado
 
 // CONFIGURACIÓN PRODUCCION
 const GOOGLE_CLIENT_ID = '799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.googleusercontent.com';
@@ -17,83 +14,60 @@ const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyN49EgjqFoE4
 //const SHEET_ID = '1YLmEuA-O3Vc1fWRQ1nC_BojOUSVmzBb8QxCCsb5tQwk';
 //const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzBJRaLjii8Y8F_9XC3_n5e--R2bzDXqrfWHeFUIYn3cRct-qVHZ1VEgJEj8XKEU9Ch/exec';
 
-// NUEVAS CONFIGURACIONES PARA MANEJO DE ERRORES
-const MAX_RETRIES = 3;
-const RETRY_DELAY = 2000; // 2 segundos entre reintentos
-const REQUEST_TIMEOUT = 45000; // 45 segundos de timeout (aumentado)
-const CHUNK_SIZE = 100; // Procesar datos en chunks si es necesario
-
-const ADMIN_USERS = [
+// Usuarios autorizados para generar reportes
+const AUTHORIZED_USERS = [
     'jose.lino.flores.madrigal@gmail.com',
     'cepsic.atencionpsicologica@gmail.com',
     'adymadrid.22@gmail.com',
     'cespsic@uas.edu.mx'
 ];
 
+// Estado de autenticación
 let authenticationAttempts = 0;
 const MAX_AUTH_ATTEMPTS = 3;
-
-// === UTILIDAD: DELAY ===
-function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// === UTILIDAD: RETRY CON EXPONENTIAL BACKOFF ===
-async function retryWithBackoff(fn, retries = MAX_RETRIES, delayMs = RETRY_DELAY) {
-    for (let i = 0; i < retries; i++) {
-        try {
-            return await fn();
-        } catch (error) {
-            console.warn(`Intento ${i + 1}/${retries} falló:`, error.message);
-            
-            if (i === retries - 1) {
-                throw error;
-            }
-            
-            // Exponential backoff: 2s, 4s, 8s
-            const waitTime = delayMs * Math.pow(2, i);
-            console.log(`Esperando ${waitTime}ms antes de reintentar...`);
-            await delay(waitTime);
-        }
-    }
-}
 
 // Inicializar aplicación
 document.addEventListener('DOMContentLoaded', function() {
     console.log('=== DOM CARGADO ===');
-    console.log('CESPSIC Reportes v.3.3 - Sistema Multi-Rol con Manejo de Errores Mejorado');
+    console.log('CESPSIC Reportes v.2.0 - Autenticación mejorada');
     console.log('Fecha/hora:', new Date().toISOString());
     
     initializeApp();
 });
 
 function initializeApp() {
-    console.log('=== INICIANDO APLICACIÓN CESPSIC REPORTES v.3.3 ===');
-    console.log('MODO: Multi-rol con Retry Logic');
+    console.log('=== INICIANDO APLICACIÓN CESPSIC REPORTES v.2.0 ===');
+    console.log('MODO: Datos reales desde Google Sheets con permisos corregidos');
     
+    // Verificar contenedor
     const container = document.getElementById('signin-button-container');
     if (!container) {
         console.error('ERROR: Contenedor signin-button-container no encontrado');
         return;
     }
     
+    // Mostrar mensaje de carga
     showLoadingMessage('Iniciando sistema de autenticación...');
+    
+    // Configurar eventos y fechas
     setupEventListeners();
     setMaxDate();
+    
+    // Inicializar Google Sign-In con timeout
     initializeGoogleSignInWithRetry();
     
+    // Verificar configuración
     console.log('Configuración:');
     console.log('- Client ID:', GOOGLE_CLIENT_ID ? 'Configurado' : 'NO CONFIGURADO');
     console.log('- Script URL:', GOOGLE_SCRIPT_URL ? 'Configurado' : 'NO CONFIGURADO');
-    console.log('- Max Retries:', MAX_RETRIES);
-    console.log('- Request Timeout:', REQUEST_TIMEOUT + 'ms');
+    console.log('- Usuarios autorizados:', AUTHORIZED_USERS.length);
 }
 
 function showLoadingMessage(message) {
     const container = document.getElementById('signin-button-container');
     container.innerHTML = `
         <div style="text-align: center; padding: 20px; color: #666;">
-            <div style="display: inline-block; animation: spin 1s linear infinite; margin-right: 10px;">⏳</div>
+            <div style="display: inline-block; animation: spin 1s linear infinite; margin-right: 10px;">🔄</div>
             ${message}
         </div>
         <style>
@@ -137,12 +111,15 @@ function initializeGoogleSignIn() {
             callback: handleCredentialResponse,
             auto_select: false,
             cancel_on_tap_outside: true,
-            use_fedcm_for_prompt: false
+            use_fedcm_for_prompt: false // Evitar doble autenticación
         });
 
         const container = document.getElementById("signin-button-container");
+        
+        // Limpiar contenedor
         container.innerHTML = '';
         
+        // Renderizar botón
         google.accounts.id.renderButton(container, {
             theme: "filled_blue",
             size: "large",
@@ -154,6 +131,8 @@ function initializeGoogleSignIn() {
         });
 
         console.log('✅ Google Sign-In inicializado correctamente');
+        
+        // Verificar backend después de la inicialización
         setTimeout(checkBackendAvailability, 2000);
 
     } catch (error) {
@@ -164,12 +143,9 @@ function initializeGoogleSignIn() {
 
 async function checkBackendAvailability() {
     try {
-        console.log('🔍 Verificando disponibilidad del backend...');
+        console.log('🔗 Verificando disponibilidad del backend...');
         
-        const response = await fetchWithTimeout(
-            GOOGLE_SCRIPT_URL + '?action=test_permissions', 
-            REQUEST_TIMEOUT
-        );
+        const response = await fetchWithTimeout(GOOGLE_SCRIPT_URL + '?action=test_permissions', 10000);
         
         if (response.ok) {
             console.log('✅ Backend disponible');
@@ -182,11 +158,11 @@ async function checkBackendAvailability() {
         
     } catch (error) {
         console.warn('⚠️ No se pudo verificar backend:', error.message);
-        showStatus('Advertencia: Verificación de backend falló (puede seguir funcionando)', 'error');
+        showStatus('Advertencia: Verificación de backend falló', 'error');
     }
 }
 
-async function handleCredentialResponse(response) {
+function handleCredentialResponse(response) {
     try {
         authenticationAttempts++;
         console.log(`🔐 Procesando autenticación (intento ${authenticationAttempts})...`);
@@ -204,11 +180,19 @@ async function handleCredentialResponse(response) {
         
         console.log('👤 Usuario detectado:', userInfo.email);
         
-        if (!userInfo.email_verified) {
-            showStatus('⚠️ Cuenta no verificada. Use una cuenta de Gmail verificada.', 'error');
+        // Verificar autorización
+        if (!AUTHORIZED_USERS.includes(userInfo.email)) {
+            showStatus(`❌ Acceso denegado. El email ${userInfo.email} no está autorizado.`, 'error');
             return;
         }
         
+        // Verificar email verificado
+        if (!userInfo.email_verified) {
+            showStatus('❌ Cuenta no verificada. Use una cuenta de Gmail verificada.', 'error');
+            return;
+        }
+        
+        // Configurar usuario
         currentUser = {
             id: userInfo.sub,
             email: userInfo.email,
@@ -219,26 +203,17 @@ async function handleCredentialResponse(response) {
 
         isAuthenticated = true;
         
-        await checkUserRole();
-        
         console.log('✅ Autenticación exitosa para:', currentUser.name);
-        console.log('🔑 Rol del usuario:', userRole);
         
+        // Actualizar UI
         updateAuthenticationUI();
         enableForm();
         
-        if (currentUser.isAdmin) {
-            const fechaDesde = document.getElementById('fecha_desde').value;
-            const fechaHasta = document.getElementById('fecha_hasta').value;
-            await loadUsersList(fechaDesde, fechaHasta);
-        }
+        // Probar permisos del backend
+        setTimeout(() => testBackendPermissions(), 1000);
         
-        const roleMessage = userRole === 'admin' 
-            ? `Bienvenido Administrador ${currentUser.name}! Puede ver todos los registros.`
-            : `Bienvenido ${currentUser.name}! Puede ver sus propios registros.`;
-        
-        showStatus(roleMessage, 'success');
-        setTimeout(() => hideStatus(), 5000);
+        showStatus(`Bienvenido ${currentUser.name}! Acceso autorizado.`, 'success');
+        setTimeout(() => hideStatus(), 4000);
 
     } catch (error) {
         console.error('❌ Error procesando credenciales:', error);
@@ -246,128 +221,36 @@ async function handleCredentialResponse(response) {
     }
 }
 
-async function checkUserRole() {
+async function testBackendPermissions() {
     try {
-        console.log('🔍 Verificando rol del usuario...');
+        console.log('🔍 Probando permisos del backend...');
+        showStatus('Verificando permisos del sistema...', 'loading');
         
-        const result = await makeBackendRequest('check_user_role', {});
+        const testResult = await makeBackendRequest('test_permissions', {});
         
-        if (result.success) {
-            userRole = result.role;
-            console.log(`✅ Rol verificado: ${userRole} (Admin: ${result.isAdmin})`);
+        if (testResult.success) {
+            console.log('✅ Prueba de permisos exitosa');
+            const failedTests = Object.values(testResult.tests || {}).filter(test => !test.success);
             
-            currentUser.isAdmin = result.isAdmin;
-            currentUser.permissions = result.permissions;
-            
-            return result;
+            if (failedTests.length === 0) {
+                showStatus('Sistema completamente funcional', 'success');
+            } else {
+                console.warn('⚠️ Algunas pruebas fallaron:', failedTests);
+                showStatus(`Advertencia: ${failedTests.length} componentes con problemas`, 'error');
+            }
         } else {
-            console.warn('⚠️ No se pudo verificar el rol, asumiendo usuario normal');
-            userRole = 'Usuario';
-            currentUser.isAdmin = false;
+            console.error('❌ Prueba de permisos falló:', testResult.message);
+            showStatus('Error en permisos: ' + testResult.message, 'error');
         }
+        
+        setTimeout(() => hideStatus(), 5000);
         
     } catch (error) {
-        console.error('❌ Error verificando rol:', error);
-        userRole = 'Usuario';
-        currentUser.isAdmin = false;
+        console.error('❌ Error probando permisos:', error);
+        showStatus('No se pudieron verificar los permisos del sistema', 'error');
     }
 }
 
-async function loadUsersList(fechaDesde = null, fechaHasta = null) {
-    try {
-        console.log('📋 Cargando lista de usuarios (solo admin)...');
-        if (fechaDesde && fechaHasta) {
-            console.log(`📅 Filtrando por rango: ${fechaDesde} al ${fechaHasta}`);
-        }
-        
-        const params = fechaDesde && fechaHasta ? {
-            fechaDesde: fechaDesde,
-            fechaHasta: fechaHasta
-        } : {};
-        
-        const result = await makeBackendRequest('get_users_list', params);
-        
-        if (result.success) {
-            usersList = result.users || [];
-            console.log(`✅ Lista de usuarios cargada: ${usersList.length} usuarios`);
-            if (result.dateRange) {
-                console.log(`   (En rango ${result.dateRange.desde} - ${result.dateRange.hasta})`);
-            }
-            updateAdminControls();
-        } else {
-            console.error('❌ Error cargando usuarios:', result.message);
-            usersList = [];
-            updateAdminControls();
-        }
-        
-    } catch (error) {
-        console.error('❌ Error cargando lista de usuarios:', error);
-        usersList = [];
-        updateAdminControls();
-    }
-}
-
-function updateAdminControls() {
-    const adminControls = document.getElementById('admin-controls');
-    const adminEvidenciasControl = document.getElementById('admin-evidencias-control');
-    
-    if (adminControls) {
-        if (currentUser.isAdmin) {
-            adminControls.style.display = 'block';
-            
-            if (adminEvidenciasControl) {
-                adminEvidenciasControl.style.display = 'block';
-            }
-            
-            const userSelect = document.getElementById('filtro_usuario');
-            if (userSelect) {
-                const currentValue = userSelect.value;
-                
-                userSelect.innerHTML = '<option value="">Todos los usuarios</option>';
-                
-                if (usersList.length === 0) {
-                    const optionNoUsers = document.createElement('option');
-                    optionNoUsers.value = '';
-                    optionNoUsers.textContent = '(No hay usuarios en este rango de fechas)';
-                    optionNoUsers.disabled = true;
-                    userSelect.appendChild(optionNoUsers);
-                } else {
-                    usersList.forEach(user => {
-                        const option = document.createElement('option');
-                        option.value = user.email;
-                        option.textContent = user.nombre;
-                        userSelect.appendChild(option);
-                    });
-                }
-                
-                if (currentValue && usersList.some(u => u.email === currentValue)) {
-                    userSelect.value = currentValue;
-                } else {
-                    userSelect.value = '';
-                }
-            }
-            
-            const ordenarSelect = document.getElementById('ordenar_por');
-            if (ordenarSelect && !ordenarSelect.value) {
-                ordenarSelect.value = 'nombre';
-            }
-        } else {
-            adminControls.style.display = 'none';
-            
-            if (adminEvidenciasControl) {
-                adminEvidenciasControl.style.display = 'none';
-                
-                const evidenciasSoloCheckbox = document.getElementById('incluir_evidencias_solo');
-                if (evidenciasSoloCheckbox && evidenciasSoloCheckbox.checked) {
-                    evidenciasSoloCheckbox.checked = false;
-                    updateCheckboxStyles();
-                }
-            }
-        }
-    }
-}
-
-// === FUNCIÓN MEJORADA CON RETRY Y TIMEOUT ===
 async function makeBackendRequest(action, additionalData = {}) {
     const requestData = {
         action: action,
@@ -376,69 +259,44 @@ async function makeBackendRequest(action, additionalData = {}) {
         ...additionalData
     };
     
-    console.log('📤 Enviando solicitud al backend:', action);
-    console.log('📊 Tamaño de datos:', JSON.stringify(requestData).length, 'bytes');
+    console.log('📡 Enviando solicitud al backend:', action);
     
-    // Intentar con retry logic
-    return await retryWithBackoff(async () => {
-        // Primero intentar JSONP (más confiable para Apps Script)
-        try {
-            console.log('🔄 Intentando con JSONP...');
-            const jsonpResponse = await fetchWithJSONP(GOOGLE_SCRIPT_URL, requestData, REQUEST_TIMEOUT);
-            
-            if (jsonpResponse && jsonpResponse.success !== undefined) {
-                console.log('✅ Respuesta JSONP exitosa');
-                return jsonpResponse;
-            }
-        } catch (jsonpError) {
-            console.log('⚠️ JSONP falló:', jsonpError.message);
-            // Continuar con POST
+    // Intentar con JSONP primero
+    try {
+        const jsonpResponse = await fetchWithJSONP(GOOGLE_SCRIPT_URL, requestData);
+        if (jsonpResponse && jsonpResponse.success !== undefined) {
+            console.log('✅ Respuesta JSONP exitosa');
+            return jsonpResponse;
         }
+    } catch (jsonpError) {
+        console.log('⚠️ JSONP falló:', jsonpError.message);
+    }
+    
+    // Intentar con fetch POST
+    try {
+        const response = await fetchWithTimeout(GOOGLE_SCRIPT_URL, 30000, {
+            method: 'POST',
+            mode: 'cors',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestData)
+        });
         
-        // Fallback a POST con fetch
-        try {
-            console.log('🔄 Intentando con POST fetch...');
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
-            
-            const response = await fetch(GOOGLE_SCRIPT_URL, {
-                method: 'POST',
-                mode: 'cors',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(requestData),
-                signal: controller.signal
-            });
-            
-            clearTimeout(timeoutId);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            
+        if (response.ok) {
             const result = await response.json();
             console.log('✅ Respuesta POST exitosa');
             return result;
-            
-        } catch (fetchError) {
-            console.error('❌ Fetch POST falló:', fetchError);
-            
-            // Mensajes de error más descriptivos
-            if (fetchError.name === 'AbortError') {
-                throw new Error(`Timeout: La solicitud tomó más de ${REQUEST_TIMEOUT/1000} segundos. El servidor puede estar ocupado.`);
-            }
-            
-            if (fetchError.message.includes('Failed to fetch')) {
-                throw new Error('No se pudo conectar con el servidor. Verifique su conexión a internet o intente nuevamente.');
-            }
-            
-            throw new Error('Error de conexión: ' + fetchError.message);
+        } else {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-    });
+    } catch (fetchError) {
+        console.log('⚠️ Fetch POST falló:', fetchError.message);
+        throw new Error('No se pudo conectar con el servidor: ' + fetchError.message);
+    }
 }
 
-async function fetchWithJSONP(url, data, timeout = REQUEST_TIMEOUT) {
+async function fetchWithJSONP(url, data, timeout = 30000) {
     return new Promise((resolve, reject) => {
         const callbackName = 'jsonp_callback_' + Math.round(100000 * Math.random());
         
@@ -462,7 +320,7 @@ async function fetchWithJSONP(url, data, timeout = REQUEST_TIMEOUT) {
         
         const timeoutId = setTimeout(() => {
             cleanup();
-            reject(new Error(`JSONP Timeout: No se recibió respuesta en ${timeout/1000} segundos`));
+            reject(new Error('Timeout: No se recibió respuesta del servidor'));
         }, timeout);
         
         script.onload = () => clearTimeout(timeoutId);
@@ -477,7 +335,7 @@ async function fetchWithJSONP(url, data, timeout = REQUEST_TIMEOUT) {
     });
 }
 
-async function fetchWithTimeout(url, timeout = REQUEST_TIMEOUT, options = {}) {
+async function fetchWithTimeout(url, timeout = 10000, options = {}) {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
     
@@ -490,11 +348,6 @@ async function fetchWithTimeout(url, timeout = REQUEST_TIMEOUT, options = {}) {
         return response;
     } catch (error) {
         clearTimeout(id);
-        
-        if (error.name === 'AbortError') {
-            throw new Error(`Timeout: La solicitud excedió ${timeout/1000} segundos`);
-        }
-        
         throw error;
     }
 }
@@ -521,26 +374,18 @@ function updateAuthenticationUI() {
 
     if (isAuthenticated && currentUser) {
         authSection.classList.add('authenticated');
-        
-        const roleIcon = currentUser.isAdmin ? '👑' : '👤';
-        const roleText = currentUser.isAdmin ? 'Administrador' : 'Usuario';
-        authTitle.textContent = `${roleIcon} Acceso Autorizado - ${roleText}`;
+        authTitle.textContent = '✅ Acceso Autorizado';
         authTitle.classList.add('authenticated');
 
         document.getElementById('user-avatar').src = currentUser.picture;
         document.getElementById('user-email').textContent = currentUser.email;
         document.getElementById('user-name').textContent = currentUser.name;
-        
-        const userStatus = document.getElementById('user-status');
-        userStatus.textContent = currentUser.isAdmin ? '👑 Administrador' : '✅ Usuario Autorizado';
-        userStatus.style.background = currentUser.isAdmin ? '#fff3cd' : '#d4edda';
-        userStatus.style.color = currentUser.isAdmin ? '#856404' : '#155724';
-        
         userInfo.classList.add('show');
+
         signinContainer.style.display = 'none';
     } else {
         authSection.classList.remove('authenticated');
-        authTitle.textContent = '🔒 Autenticación Requerida';
+        authTitle.textContent = '🔒 Autenticación Administrativa Requerida';
         authTitle.classList.remove('authenticated');
         userInfo.classList.remove('show');
         signinContainer.style.display = 'block';
@@ -551,36 +396,12 @@ function enableForm() {
     const formContainer = document.getElementById('form-container');
     formContainer.classList.add('authenticated');
     updateSubmitButton();
-    updateFormDescription();
-    updateAdminControls();
 }
 
 function disableForm() {
     const formContainer = document.getElementById('form-container');
     formContainer.classList.remove('authenticated');
     updateSubmitButton();
-}
-
-function updateFormDescription() {
-    const description = document.querySelector('.form-description');
-    if (description && currentUser) {
-        if (currentUser.isAdmin) {
-            description.innerHTML = `
-                <strong>👑 Modo Administrador:</strong> Puede generar reportes con todos los registros del sistema o filtrar por usuario específico.
-                <br>Seleccione el rango de fechas y los usuarios disponibles se actualizarán automáticamente.
-                <br><strong>🔒 Función exclusiva:</strong> Tiene acceso al modo "Solo Evidencias de Salida" para filtrar registros con links.
-                <br><strong>📊 Ordenamiento por defecto:</strong> Nombre (puede cambiarlo en los controles de administrador).
-            `;
-            description.style.borderLeftColor = '#ffc107';
-        } else {
-            description.innerHTML = `
-                <strong>👤 Modo Usuario:</strong> Puede generar reportes solo con sus propios registros.
-                <br>Seleccione el rango de fechas para ver su información personal de asistencias.
-                <br><strong>📅 Sus registros se ordenarán cronológicamente por fecha.</strong>
-            `;
-            description.style.borderLeftColor = '#667eea';
-        }
-    }
 }
 
 function updateSubmitButton() {
@@ -591,10 +412,7 @@ function updateSubmitButton() {
         submitBtn.textContent = '🔒 Autentíquese primero para generar reporte';
     } else {
         submitBtn.disabled = false;
-        const buttonText = currentUser.isAdmin 
-            ? '📊 Generar Reporte PDF (Todos los usuarios)'
-            : '📊 Generar Mi Reporte PDF';
-        submitBtn.innerHTML = buttonText;
+        submitBtn.innerHTML = '📋 Generar Reporte PDF';
     }
 }
 
@@ -621,7 +439,6 @@ function signOut() {
         
         isAuthenticated = false;
         currentUser = null;
-        userRole = null;
         attendanceData = [];
         pdfBlob = null;
         authenticationAttempts = 0;
@@ -633,6 +450,7 @@ function signOut() {
         showStatus('Sesión cerrada correctamente.', 'success');
         setTimeout(() => {
             hideStatus();
+            // Reinicializar después de cerrar sesión
             setTimeout(() => initializeGoogleSignIn(), 1000);
         }, 2000);
 
@@ -662,29 +480,16 @@ function setMaxDate() {
 }
 
 function setupEventListeners() {
-    document.getElementById('fecha_desde').addEventListener('change', handleDateChange);
-    document.getElementById('fecha_hasta').addEventListener('change', handleDateChange);
+    document.getElementById('fecha_desde').addEventListener('change', validateDates);
+    document.getElementById('fecha_hasta').addEventListener('change', validateDates);
     document.getElementById('reportForm').addEventListener('submit', handleFormSubmit);
+    
+    // Agregar listeners para el comportamiento de checkboxes
     setupCheckboxListeners();
 }
 
-async function handleDateChange() {
-    if (!validateDates()) {
-        return;
-    }
-    
-    if (currentUser && currentUser.isAdmin) {
-        const fechaDesde = document.getElementById('fecha_desde').value;
-        const fechaHasta = document.getElementById('fecha_hasta').value;
-        
-        if (fechaDesde && fechaHasta) {
-            console.log('📅 Fechas cambiadas, actualizando lista de usuarios...');
-            await loadUsersList(fechaDesde, fechaHasta);
-        }
-    }
-}
-
 function setupCheckboxListeners() {
+    // Listener para cuando se marcan otros checkboxes (desmarcar evidencias_solo)
     const otherCheckboxes = [
         'incluir_intervenciones', 
         'incluir_actividades', 
@@ -698,8 +503,9 @@ function setupCheckboxListeners() {
         if (checkbox) {
             checkbox.addEventListener('change', function() {
                 if (this.checked) {
+                    // Si se marca cualquier otro checkbox, desmarcar evidencias_solo
                     const evidenciasSolo = document.getElementById('incluir_evidencias_solo');
-                    if (evidenciasSolo && evidenciasSolo.checked) {
+                    if (evidenciasSolo.checked) {
                         evidenciasSolo.checked = false;
                         updateCheckboxStyles();
                     }
@@ -712,6 +518,7 @@ function setupCheckboxListeners() {
 function handleEvidenciasChange(checkbox) {
     const isChecked = checkbox.checked;
     
+    // Lista de checkboxes que se deben desmarcar cuando se marca "Solo Evidencias"
     const otherCheckboxes = [
         'incluir_intervenciones', 
         'incluir_actividades', 
@@ -721,6 +528,7 @@ function handleEvidenciasChange(checkbox) {
     ];
     
     if (isChecked) {
+        // Desmarcar todos los otros checkboxes
         otherCheckboxes.forEach(id => {
             const cb = document.getElementById(id);
             if (cb) {
@@ -728,29 +536,29 @@ function handleEvidenciasChange(checkbox) {
             }
         });
         
-        showStatus('Modo "Solo Evidencias de Salida" activado. Se filtrarán únicamente registros de SALIDA con links clickeables.', 'loading');
+        // Mensaje actualizado para incluir generación de links
+        showStatus('Modo "Solo Evidencias de Salida" activado. Se filtrarán únicamente registros de SALIDA. Se generarán automáticamente los links a los archivos de Drive y serán clickeables en el PDF.', 'loading');
         setTimeout(() => hideStatus(), 6000);
     }
     
     updateCheckboxStyles();
 }
 
+// Hacer la función disponible globalmente para el HTML
 window.handleEvidenciasChange = handleEvidenciasChange;
 
 function updateCheckboxStyles() {
     const evidenciasSolo = document.getElementById('incluir_evidencias_solo');
     const evidenciasItem = document.querySelector('.checkbox-evidencias');
     
-    if (evidenciasSolo && evidenciasItem) {
-        if (evidenciasSolo.checked) {
-            evidenciasItem.style.background = '#e8f5e8';
-            evidenciasItem.style.borderColor = '#4caf50';
-            evidenciasItem.style.boxShadow = '0 2px 8px rgba(76, 175, 80, 0.2)';
-        } else {
-            evidenciasItem.style.background = '';
-            evidenciasItem.style.borderColor = '';
-            evidenciasItem.style.boxShadow = '';
-        }
+    if (evidenciasSolo.checked) {
+        evidenciasItem.style.background = '#e8f5e8';
+        evidenciasItem.style.borderColor = '#4caf50';
+        evidenciasItem.style.boxShadow = '0 2px 8px rgba(76, 175, 80, 0.2)';
+    } else {
+        evidenciasItem.style.background = '';
+        evidenciasItem.style.borderColor = '';
+        evidenciasItem.style.boxShadow = '';
     }
 }
 
@@ -801,26 +609,16 @@ async function handleFormSubmit(e) {
         return;
     }
     
+    // Confirmar generación
     const selectedFields = Array.from(checkboxes).map(cb => cb.nextElementSibling.textContent.split('(')[0].trim());
     const filtroTipo = document.getElementById('filtro_tipo').value;
     const filtroModalidad = document.getElementById('filtro_modalidad').value;
     const incluirCampos = getSelectedFields();
     const isModoEvidencias = incluirCampos.includes('evidencias_solo');
     
-    const filtroUsuario = currentUser.isAdmin ? (document.getElementById('filtro_usuario')?.value || '') : '';
-    const ordenarPor = currentUser.isAdmin ? (document.getElementById('ordenar_por')?.value || '') : '';
-    const usuarioNombre = filtroUsuario && usersList.length > 0 
-        ? usersList.find(u => u.email === filtroUsuario)?.nombre || filtroUsuario
-        : '';
-    
-    const userRoleText = currentUser.isAdmin 
-        ? (filtroUsuario ? `Usuario: ${usuarioNombre}` : 'Todos los usuarios')
-        : 'Solo sus registros';
-    
     let confirmMessage = `¿Está seguro de que desea generar el reporte?
 
 Período: ${fechaDesde} al ${fechaHasta}
-Ámbito: ${userRoleText}
 Campos: ${selectedFields.join(', ')}`;
     
     if (isModoEvidencias) {
@@ -828,52 +626,36 @@ Campos: ${selectedFields.join(', ')}`;
     }
     if (filtroTipo) confirmMessage += `\nTipo: ${filtroTipo}`;
     if (filtroModalidad) confirmMessage += `\nModalidad: ${filtroModalidad}`;
-    if (currentUser.isAdmin && ordenarPor) {
-        const ordenTexto = {
-            'nombre': 'Nombre',
-            'fecha': 'Fecha',
-            'tipo_estudiante': 'Tipo de Estudiante',
-            'modalidad': 'Modalidad',
-            'tipo_registro': 'Tipo de Registro'
-        };
-        confirmMessage += `\nOrden: ${ordenTexto[ordenarPor] || ordenarPor}`;
-    } else if (!currentUser.isAdmin) {
-        confirmMessage += `\nOrden: Fecha (automático)`;
-    }
     
     if (!confirm(confirmMessage)) {
         return;
     }
     
+    showStatus('Conectando con Google Sheets...', 'loading');
     const submitBtn = document.getElementById('submit_btn');
     submitBtn.disabled = true;
-    
-    let retryCount = 0;
+    submitBtn.textContent = 'Conectando...';
     
     try {
-        showStatus('🔄 Conectando con Google Sheets (puede tardar hasta 45 segundos)...', 'loading');
-        submitBtn.textContent = 'Conectando...';
-        
+        // Intentar obtener datos reales
         await fetchAttendanceData(fechaDesde, fechaHasta);
         
+        // Verificar si hay datos después del filtrado
         if (!attendanceData || attendanceData.length === 0) {
-            const noDataMessage = currentUser.isAdmin
-                ? 'No se encontraron registros en el rango de fechas seleccionado.'
-                : 'No se encontraron registros suyos en el rango de fechas seleccionado.';
-            
             showStatus(
                 isModoEvidencias 
-                    ? noDataMessage + ' (Modo evidencias de salida activo)'
-                    : noDataMessage + ' Intente ampliar el rango de fechas.',
+                    ? 'No se encontraron registros de SALIDA con evidencias en el rango de fechas seleccionado. Intente ampliar el rango de fechas o verificar los filtros.'
+                    : 'No se encontraron registros en el rango de fechas seleccionado. Intente ampliar el rango de fechas o verificar los filtros.',
                 'error'
             );
             updateSubmitButton();
             return;
         }
         
-        showStatus(`✅ Datos obtenidos (${attendanceData.length} registros). Generando PDF...`, 'loading');
+        showStatus(`Generando PDF con ${attendanceData.length} registros reales...`, 'loading');
         submitBtn.textContent = 'Generando PDF...';
         
+        // Generar PDF solo con datos reales
         await generatePDF(fechaDesde, fechaHasta);
         
         showDownloadModal(fechaDesde, fechaHasta);
@@ -881,78 +663,32 @@ Campos: ${selectedFields.join(', ')}`;
         updateSubmitButton();
         
     } catch (error) {
-        console.error('❌ Error generando reporte:', error);
+        console.error('Error generando reporte:', error);
         
-        let errorMessage = '❌ Error al generar el reporte:\n\n';
+        // Mostrar mensaje específico según el tipo de error
+        let errorMessage = 'Error al generar el reporte: ';
         
-        if (error.message.includes('Timeout')) {
-            errorMessage += '⏱️ La solicitud tardó demasiado tiempo. Esto puede ocurrir cuando:\n';
-            errorMessage += '• El servidor de Google está ocupado\n';
-            errorMessage += '• Hay muchos registros para procesar\n';
-            errorMessage += '• Su conexión a internet es lenta\n\n';
-            errorMessage += '💡 Sugerencias:\n';
-            errorMessage += '1. Intente reducir el rango de fechas\n';
-            errorMessage += '2. Espere unos minutos y vuelva a intentar\n';
-            errorMessage += '3. Verifique su conexión a internet';
-        } else if (error.message.includes('No se pudo conectar con el servidor')) {
-            errorMessage += '🌐 No se pudo establecer conexión con Google Sheets.\n\n';
-            errorMessage += '💡 Posibles causas:\n';
-            errorMessage += '1. Sin conexión a internet\n';
-            errorMessage += '2. El servicio de Google Apps Script está temporalmente inaccesible\n';
-            errorMessage += '3. Firewall o bloqueador de contenido activo\n\n';
-            errorMessage += '🔄 Solución: Intente nuevamente en unos momentos';
-        } else if (error.message.includes('Failed to fetch')) {
-            errorMessage += '🔌 Error de conexión de red.\n\n';
-            errorMessage += '💡 Recomendaciones:\n';
-            errorMessage += '1. Verifique que tiene internet estable\n';
-            errorMessage += '2. Recargue la página (F5)\n';
-            errorMessage += '3. Limpie el caché del navegador\n';
-            errorMessage += '4. Intente con otro navegador\n';
-            errorMessage += '5. Desactive temporalmente extensiones del navegador';
+        if (error.message.includes('conectar con Google Sheets')) {
+            errorMessage += 'No se pudo conectar con Google Sheets. Verifique su conexión a internet y que el sistema tenga los permisos necesarios.';
+        } else if (error.message.includes('No se pudieron obtener los datos del servidor')) {
+            errorMessage += 'El servidor no pudo procesar la solicitud. Intente nuevamente en unos momentos.';
+        } else if (error.message.includes('Usuario no autorizado')) {
+            errorMessage += 'Su sesión ha expirado o no tiene permisos. Cierre sesión y vuelva a autenticarse.';
         } else {
             errorMessage += error.message;
         }
         
         showStatus(errorMessage, 'error');
         updateSubmitButton();
-        
-        // Ofrecer opción de reintento
-        if (retryCount < MAX_RETRIES) {
-            setTimeout(() => {
-                const retry = confirm('¿Desea intentar generar el reporte nuevamente?');
-                if (retry) {
-                    retryCount++;
-                    handleFormSubmit(e);
-                }
-            }, 3000);
-        }
     }
 }
 
 async function fetchAttendanceData(fechaDesde, fechaHasta) {
     console.log('=== OBTENIENDO DATOS DE ASISTENCIA ===');
-    console.log('Usuario:', currentUser.email);
-    console.log('Rol:', userRole);
-    console.log('🔄 Iniciando con retry automático si falla...');
     
     try {
         const incluirCampos = getSelectedFields();
         const isModoEvidencias = incluirCampos.includes('evidencias_solo');
-        
-        let filtroUsuario = '';
-        let ordenarPor = '';
-        
-        if (currentUser.isAdmin) {
-            filtroUsuario = document.getElementById('filtro_usuario')?.value || '';
-            ordenarPor = document.getElementById('ordenar_por')?.value || 'nombre';
-        } else {
-            ordenarPor = 'fecha';
-        }
-        
-        selectedSortOrder = ordenarPor;
-        
-        console.log('Filtro usuario:', filtroUsuario || '(todos)');
-        console.log('Ordenar por:', ordenarPor);
         
         const result = await makeBackendRequest('get_attendance_data', {
             fechaDesde: fechaDesde,
@@ -960,18 +696,18 @@ async function fetchAttendanceData(fechaDesde, fechaHasta) {
             filtroTipo: document.getElementById('filtro_tipo').value,
             filtroModalidad: document.getElementById('filtro_modalidad').value,
             filtroTipoRegistro: isModoEvidencias ? 'salida' : '',
-            modoEvidencias: isModoEvidencias,
-            filtroUsuario: filtroUsuario,
-            ordenarPor: ordenarPor
+            modoEvidencias: isModoEvidencias
         });
         
         if (result.success && result.data) {
+            // Verificar si los datos son reales o de ejemplo
             if (result.dataSource === 'sample_data') {
                 throw new Error('No se pudo conectar con Google Sheets. Verifique la conexión y permisos.');
             }
             
             attendanceData = result.data;
             
+            // Filtro adicional en frontend para modo evidencias
             if (isModoEvidencias) {
                 attendanceData = attendanceData.filter(record => 
                     record.tipo_registro && record.tipo_registro.toLowerCase() === 'salida'
@@ -979,24 +715,85 @@ async function fetchAttendanceData(fechaDesde, fechaHasta) {
                 console.log(`Modo evidencias activo - Filtrando solo "salidas": ${attendanceData.length} registros`);
             }
             
-            console.log(`✅ Datos obtenidos: ${attendanceData.length} registros (Rol: ${result.userRole})`);
+            console.log(`Datos reales obtenidos: ${attendanceData.length} registros`);
         } else {
             throw new Error(result.message || 'No se pudieron obtener los datos del servidor');
         }
         
     } catch (error) {
-        console.error('❌ Error obteniendo datos:', error);
+        console.error('Error obteniendo datos:', error);
+        
+        // No usar datos de ejemplo - mostrar error
         attendanceData = [];
-        throw error; // Propagar el error para que sea manejado por handleFormSubmit
+        throw new Error('Error de conexión: ' + error.message);
     }
+}
+
+function generateSampleData(fechaDesde, fechaHasta) {
+    const tiposEstudiante = ['servicio_social', 'practicas_supervisadas', 'estancia_profesional'];
+    const modalidades = ['presencial', 'virtual'];
+    const nombres = ['Juan', 'María', 'Carlos', 'Ana', 'Luis', 'Carmen'];
+    const apellidosP = ['Pérez', 'López', 'García', 'Martínez', 'González'];
+    const apellidosM = ['Silva', 'Morales', 'Jiménez', 'Ruiz', 'Díaz'];
+    
+    const sampleData = [];
+    const fechaInicio = new Date(fechaDesde);
+    const fechaFin = new Date(fechaHasta);
+    const diasDiferencia = Math.ceil((fechaFin - fechaInicio) / (1000 * 60 * 60 * 24)) + 1;
+    
+    const numRegistros = Math.min(Math.max(3, diasDiferencia), 8);
+    
+    for (let i = 0; i < numRegistros; i++) {
+        const fechaRandom = new Date(fechaInicio.getTime() + Math.random() * (fechaFin.getTime() - fechaInicio.getTime()));
+        const fechaStr = fechaRandom.toISOString().split('T')[0];
+        
+        const record = {
+            nombre: nombres[Math.floor(Math.random() * nombres.length)],
+            apellido_paterno: apellidosP[Math.floor(Math.random() * apellidosP.length)],
+            apellido_materno: apellidosM[Math.floor(Math.random() * apellidosM.length)],
+            tipo_estudiante: tiposEstudiante[Math.floor(Math.random() * tiposEstudiante.length)],
+            modalidad: modalidades[Math.floor(Math.random() * modalidades.length)],
+            fecha: fechaStr,
+            hora: i % 2 === 0 ? '08:00' : '14:30',
+            tipo_registro: 'entrada',
+            intervenciones_psicologicas: String(Math.floor(Math.random() * 5) + 1),
+            ninos_ninas: String(Math.floor(Math.random() * 3)),
+            adolescentes: String(Math.floor(Math.random() * 3)),
+            adultos: String(Math.floor(Math.random() * 3)),
+            mayores_60: String(Math.floor(Math.random() * 2)),
+            familia: String(Math.floor(Math.random() * 2)),
+            actividades_realizadas: 'Entrevista psicológica, Sesiones terapéuticas',
+            total_evidencias: String(Math.floor(Math.random() * 4)),
+            // CAMPOS ACTUALIZADOS PARA EVIDENCIAS
+            nombres_evidencias: `Documento_${i+1}.pdf, Evidencia_${i+1}.docx, Reporte_${i+1}.pdf`,
+            carpeta_evidencias: `Carpeta_Estudiante_${i+1}`,
+            comentarios_adicionales: `Registro de ejemplo ${i + 1} - Datos de demostración`,
+            actividades_varias_detalle: '',
+            pruebas_psicologicas_detalle: 'MMPI-2, WAIS-IV',
+            permiso_detalle: '',
+            otro_detalle: ''
+        };
+        
+        sampleData.push(record);
+    }
+    
+    // Aplicar filtros
+    const filtroTipo = document.getElementById('filtro_tipo').value;
+    const filtroModalidad = document.getElementById('filtro_modalidad').value;
+    
+    return sampleData.filter(record => {
+        if (filtroTipo && record.tipo_estudiante !== filtroTipo) return false;
+        if (filtroModalidad && record.modalidad !== filtroModalidad) return false;
+        return true;
+    });
 }
 
 // ========== PDF GENERATION ==========
 async function generatePDF(fechaDesde, fechaHasta) {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF('l', 'mm', 'legal');
+    const doc = new jsPDF('l', 'mm', 'a4');
     
-    doc.setFont('times');
+    doc.setFont('helvetica');
     addPDFHeader(doc, fechaDesde, fechaHasta);
     
     const tableData = prepareTableData();
@@ -1004,12 +801,15 @@ async function generatePDF(fechaDesde, fechaHasta) {
     const isModoEvidencias = incluirCampos.includes('evidencias_solo');
     
     if (isModoEvidencias) {
+        // Preparar datos para modo evidencias con links clickeables
         const headers = getTableHeaders();
         const processedData = [];
         
         tableData.forEach(row => {
             const newRow = [...row];
+            // La columna de links estará en la posición 8 (después de nombres y carpeta)
             if (row[8] && typeof row[8] === 'string' && row[8].includes('https://')) {
+                // Mantener los links como texto para hacer clickeables
                 newRow[8] = row[8];
             } else {
                 newRow[8] = row[8] || 'Sin links disponibles';
@@ -1017,42 +817,36 @@ async function generatePDF(fechaDesde, fechaHasta) {
             processedData.push(newRow);
         });
         
+        // Configurar la tabla con links clickeables
         doc.autoTable({
             head: [headers],
             body: processedData,
             startY: 40,
             styles: {
-                fontSize: 8,
-                font: 'times',
-                cellPadding: 1.5,
+                fontSize: 7,
+                cellPadding: 2,
                 lineColor: [200, 200, 200],
                 lineWidth: 0.1
             },
             headStyles: {
                 fillColor: [102, 126, 234],
                 textColor: 255,
-                fontStyle: 'bold',
-                fontSize: 8
+                fontStyle: 'bold'
             },
             alternateRowStyles: {
                 fillColor: [248, 249, 250]
             },
             columnStyles: {
-                0: { cellWidth: 50 },
-                1: { cellWidth: 25 },
-                2: { cellWidth: 22 },
-                3: { cellWidth: 22 },
-                4: { cellWidth: 15 },
-                5: { cellWidth: 20 },
-                6: { cellWidth: 40 },
-                7: { cellWidth: 35 },
+                6: { cellWidth: 40 }, // Nombres de evidencias
+                7: { cellWidth: 35 }, // Carpeta
                 8: { 
-                    cellWidth: 50,
-                    fontSize: 7,
-                    textColor: [0, 0, 255]
+                    cellWidth: 65, // Links clickeables
+                    fontSize: 6,
+                    textColor: [0, 0, 255] // Azul para simular links
                 }
             },
             didDrawCell: function(data) {
+                // Hacer los links clickeables en la columna de links (índice 8)
                 if (data.column.index === 8 && data.section === 'body') {
                     const cellContent = processedData[data.row.index][8];
                     
@@ -1061,8 +855,10 @@ async function generatePDF(fechaDesde, fechaHasta) {
                         
                         linksData.forEach((linkData, index) => {
                             if (linkData.url) {
+                                // Calcular la posición Y para cada link
                                 const linkY = data.cell.y + (index * 3) + 3;
                                 
+                                // Crear área clickeable
                                 doc.link(
                                     data.cell.x + 1,
                                     linkY - 1,
@@ -1078,29 +874,23 @@ async function generatePDF(fechaDesde, fechaHasta) {
         });
         
     } else {
-        const columnWidths = calculateColumnWidths(selectedSortOrder, incluirCampos);
-        
+        // Modo normal sin links
         doc.autoTable({
             head: [getTableHeaders()],
             body: tableData,
             startY: 40,
             styles: {
                 fontSize: 8,
-                font: 'times',
-                cellPadding: 1.5,
-                lineColor: [200, 200, 200],
-                lineWidth: 0.1
+                cellPadding: 2
             },
             headStyles: {
                 fillColor: [102, 126, 234],
                 textColor: 255,
-                fontStyle: 'bold',
-                fontSize: 8
+                fontStyle: 'bold'
             },
             alternateRowStyles: {
                 fillColor: [248, 249, 250]
-            },
-            columnStyles: columnWidths
+            }
         });
     }
     
@@ -1110,40 +900,16 @@ async function generatePDF(fechaDesde, fechaHasta) {
 
 function addPDFHeader(doc, fechaDesde, fechaHasta) {
     doc.setFontSize(16);
-    doc.setFont('times', 'bold');
-    doc.text('REPORTE DE ASISTENCIAS - CESPSIC', 178, 15, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.text('REPORTE DE ASISTENCIAS - CESPSIC', 148, 15, { align: 'center' });
     
     doc.setFontSize(12);
-    doc.setFont('times', 'normal');
-    doc.text(`Período: ${fechaDesde} al ${fechaHasta}`, 178, 25, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Período: ${fechaDesde} al ${fechaHasta}`, 148, 25, { align: 'center' });
     
-    const filtroUsuario = currentUser.isAdmin ? (document.getElementById('filtro_usuario')?.value || '') : '';
-    const usuarioNombre = filtroUsuario && usersList.length > 0 
-        ? usersList.find(u => u.email === filtroUsuario)?.nombre || filtroUsuario
-        : '';
-    
-    doc.setFontSize(9);
-    let roleText = currentUser.isAdmin 
-        ? (filtroUsuario ? `(Admin - Usuario: ${usuarioNombre})` : '(Administrador - Todos los registros)')
-        : '(Usuario - Registros propios)';
-    
-    doc.text(`Generado por: ${currentUser.name} ${roleText}`, 10, 32);
-    
-    if (currentUser.isAdmin && selectedSortOrder) {
-        const ordenTexto = {
-            'nombre': 'Nombre',
-            'fecha': 'Fecha',
-            'tipo_estudiante': 'Tipo de Estudiante',
-            'modalidad': 'Modalidad',
-            'tipo_registro': 'Tipo de Registro'
-        };
-        doc.text(`Ordenado por: ${ordenTexto[selectedSortOrder] || selectedSortOrder}`, 270, 32);
-    } else if (!currentUser.isAdmin) {
-        doc.text(`Ordenado por: Fecha`, 270, 32);
-    } else {
-        doc.text(`Fecha: ${new Date().toLocaleString('es-MX')}`, 270, 32);
-    }
-    
+    doc.setFontSize(10);
+    doc.text(`Generado por: ${currentUser.name} (${currentUser.email})`, 10, 32);
+    doc.text(`Fecha: ${new Date().toLocaleString('es-MX')}`, 200, 32);
     doc.text(`Total registros: ${attendanceData.length}`, 10, 37);
 }
 
@@ -1155,240 +921,66 @@ function addPDFFooter(doc) {
         doc.setFontSize(8);
         doc.text(
             `Página ${i} de ${pageCount} - CESPSIC`,
-            178,
+            148,
             205,
             { align: 'center' }
         );
     }
 }
 
-function calculateColumnWidths(sortOrder, incluirCampos) {
-    const widths = {};
-    let colIndex = 0;
-    
-    const basicColumns = {
-        nombre: 55,
-        fecha: 22,
-        tipo_registro: 20,
-        modalidad: 22,
-        tipo_estudiante: 30,
-        hora: 15
-    };
-    
-    switch (sortOrder) {
-        case 'nombre':
-            widths[colIndex++] = { cellWidth: basicColumns.nombre };
-            widths[colIndex++] = { cellWidth: basicColumns.fecha };
-            widths[colIndex++] = { cellWidth: basicColumns.tipo_registro };
-            widths[colIndex++] = { cellWidth: basicColumns.modalidad };
-            widths[colIndex++] = { cellWidth: basicColumns.tipo_estudiante };
-            widths[colIndex++] = { cellWidth: basicColumns.hora };
-            break;
-        case 'tipo_estudiante':
-            widths[colIndex++] = { cellWidth: basicColumns.tipo_estudiante };
-            widths[colIndex++] = { cellWidth: basicColumns.nombre };
-            widths[colIndex++] = { cellWidth: basicColumns.fecha };
-            widths[colIndex++] = { cellWidth: basicColumns.tipo_registro };
-            widths[colIndex++] = { cellWidth: basicColumns.modalidad };
-            widths[colIndex++] = { cellWidth: basicColumns.hora };
-            break;
-        case 'fecha':
-            widths[colIndex++] = { cellWidth: basicColumns.fecha };
-            widths[colIndex++] = { cellWidth: basicColumns.nombre };
-            widths[colIndex++] = { cellWidth: basicColumns.tipo_registro };
-            widths[colIndex++] = { cellWidth: basicColumns.tipo_estudiante };
-            widths[colIndex++] = { cellWidth: basicColumns.modalidad };
-            widths[colIndex++] = { cellWidth: basicColumns.hora };
-            break;
-        case 'modalidad':
-            widths[colIndex++] = { cellWidth: basicColumns.modalidad };
-            widths[colIndex++] = { cellWidth: basicColumns.nombre };
-            widths[colIndex++] = { cellWidth: basicColumns.fecha };
-            widths[colIndex++] = { cellWidth: basicColumns.tipo_registro };
-            widths[colIndex++] = { cellWidth: basicColumns.tipo_estudiante };
-            widths[colIndex++] = { cellWidth: basicColumns.hora };
-            break;
-        case 'tipo_registro':
-            widths[colIndex++] = { cellWidth: basicColumns.tipo_registro };
-            widths[colIndex++] = { cellWidth: basicColumns.nombre };
-            widths[colIndex++] = { cellWidth: basicColumns.fecha };
-            widths[colIndex++] = { cellWidth: basicColumns.modalidad };
-            widths[colIndex++] = { cellWidth: basicColumns.tipo_estudiante };
-            widths[colIndex++] = { cellWidth: basicColumns.hora };
-            break;
-        default:
-            widths[colIndex++] = { cellWidth: basicColumns.nombre };
-            widths[colIndex++] = { cellWidth: basicColumns.tipo_estudiante };
-            widths[colIndex++] = { cellWidth: basicColumns.modalidad };
-            widths[colIndex++] = { cellWidth: basicColumns.fecha };
-            widths[colIndex++] = { cellWidth: basicColumns.hora };
-            widths[colIndex++] = { cellWidth: basicColumns.tipo_registro };
-    }
-    
-    if (incluirCampos.includes('intervenciones')) {
-        widths[colIndex++] = { cellWidth: 14 };
-        widths[colIndex++] = { cellWidth: 12 };
-        widths[colIndex++] = { cellWidth: 12 };
-        widths[colIndex++] = { cellWidth: 12 };
-        widths[colIndex++] = { cellWidth: 12 };
-        widths[colIndex++] = { cellWidth: 12 };
-    }
-    
-    if (incluirCampos.includes('actividades')) {
-        widths[colIndex++] = { cellWidth: 45 };
-    }
-    
-    if (incluirCampos.includes('evidencias')) {
-        widths[colIndex++] = { cellWidth: 15 };
-    }
-    
-    if (incluirCampos.includes('comentarios')) {
-        widths[colIndex++] = { cellWidth: 40 };
-    }
-    
-    if (incluirCampos.includes('permisos')) {
-        widths[colIndex++] = { cellWidth: 30 };
-        widths[colIndex++] = { cellWidth: 30 };
-    }
-    
-    return widths;
-}
-
 function getTableHeaders() {
     const incluirCampos = getSelectedFields();
-    let basicHeaders = [];
+    const headers = ['Nombre Completo', 'Tipo Estudiante', 'Modalidad', 'Fecha', 'Hora', 'Tipo Registro'];
     
     if (incluirCampos.includes('evidencias_solo')) {
-        basicHeaders = ['Nombre Completo', 'Tipo Estudiante', 'Modalidad', 'Fecha', 'Hora', 'Tipo Registro'];
-        basicHeaders.push('Nombres de Evidencias', 'Carpeta en Drive', 'Links a Archivos');
+        // Solo evidencias: agregar las tres columnas
+        headers.push('Nombres de Evidencias', 'Carpeta en Drive', 'Links a Archivos');
     } else {
-        switch (selectedSortOrder) {
-            case 'nombre':
-                basicHeaders = ['Nombre Completo', 'Fecha', 'Tipo Registro', 'Modalidad', 'Tipo Estudiante', 'Hora'];
-                break;
-            case 'tipo_estudiante':
-                basicHeaders = ['Tipo Estudiante', 'Nombre Completo', 'Fecha', 'Tipo Registro', 'Modalidad', 'Hora'];
-                break;
-            case 'fecha':
-                basicHeaders = ['Fecha', 'Nombre Completo', 'Tipo Registro', 'Tipo Estudiante', 'Modalidad', 'Hora'];
-                break;
-            case 'modalidad':
-                basicHeaders = ['Modalidad', 'Nombre Completo', 'Fecha', 'Tipo Registro', 'Tipo Estudiante', 'Hora'];
-                break;
-            case 'tipo_registro':
-                basicHeaders = ['Tipo Registro', 'Nombre Completo', 'Fecha', 'Modalidad', 'Tipo Estudiante', 'Hora'];
-                break;
-            default:
-                basicHeaders = ['Nombre Completo', 'Tipo Estudiante', 'Modalidad', 'Fecha', 'Hora', 'Tipo Registro'];
-        }
-        
+        // Modo normal: agregar campos según selección
         if (incluirCampos.includes('intervenciones')) {
-            basicHeaders.push('Interv.', 'Niños', 'Adoles.', 'Adult.', '>60', 'Fam.');
+            headers.push('Intervenciones', 'Niños', 'Adolescentes', 'Adultos', 'Mayores 60', 'Familia');
         }
         if (incluirCampos.includes('actividades')) {
-            basicHeaders.push('Actividades');
+            headers.push('Actividades');
         }
         if (incluirCampos.includes('evidencias')) {
-            basicHeaders.push('Total Ev.');
+            headers.push('Total Evidencias');
         }
         if (incluirCampos.includes('comentarios')) {
-            basicHeaders.push('Comentarios');
+            headers.push('Comentarios');
         }
         if (incluirCampos.includes('permisos')) {
-            basicHeaders.push('Det. Permiso', 'Det. Otro');
+            headers.push('Detalle Permiso', 'Detalle Otro');
         }
     }
     
-    return basicHeaders;
+    return headers;
 }
 
 function prepareTableData() {
     const incluirCampos = getSelectedFields();
     
     return attendanceData.map(record => {
-        const nombreCompleto = normalizeFullName(
-            record.nombre || '',
-            record.apellido_paterno || '',
-            record.apellido_materno || ''
-        );
+        const nombreCompleto = `${record.nombre} ${record.apellido_paterno} ${record.apellido_materno}`.trim();
         
-        let row = [];
+        const row = [
+            nombreCompleto,
+            record.tipo_estudiante || '',
+            record.modalidad || '',
+            record.fecha || '',
+            record.hora || '',
+            record.tipo_registro || ''
+        ];
         
         if (incluirCampos.includes('evidencias_solo')) {
-            row = [
-                nombreCompleto,
-                record.tipo_estudiante || '',
-                record.modalidad || '',
-                record.fecha || '',
-                record.hora || '',
-                record.tipo_registro || '',
+            // Solo evidencias: agregar las tres columnas
+            row.push(
                 record.nombres_evidencias || 'Sin evidencias',
                 record.carpeta_evidencias || 'Sin carpeta',
                 record.links_evidencias || 'Sin links disponibles'
-            ];
+            );
         } else {
-            switch (selectedSortOrder) {
-                case 'nombre':
-                    row = [
-                        nombreCompleto,
-                        record.fecha || '',
-                        record.tipo_registro || '',
-                        record.modalidad || '',
-                        record.tipo_estudiante || '',
-                        record.hora || ''
-                    ];
-                    break;
-                case 'tipo_estudiante':
-                    row = [
-                        record.tipo_estudiante || '',
-                        nombreCompleto,
-                        record.fecha || '',
-                        record.tipo_registro || '',
-                        record.modalidad || '',
-                        record.hora || ''
-                    ];
-                    break;
-                case 'fecha':
-                    row = [
-                        record.fecha || '',
-                        nombreCompleto,
-                        record.tipo_registro || '',
-                        record.tipo_estudiante || '',
-                        record.modalidad || '',
-                        record.hora || ''
-                    ];
-                    break;
-                case 'modalidad':
-                    row = [
-                        record.modalidad || '',
-                        nombreCompleto,
-                        record.fecha || '',
-                        record.tipo_registro || '',
-                        record.tipo_estudiante || '',
-                        record.hora || ''
-                    ];
-                    break;
-                case 'tipo_registro':
-                    row = [
-                        record.tipo_registro || '',
-                        nombreCompleto,
-                        record.fecha || '',
-                        record.modalidad || '',
-                        record.tipo_estudiante || '',
-                        record.hora || ''
-                    ];
-                    break;
-                default:
-                    row = [
-                        nombreCompleto,
-                        record.tipo_estudiante || '',
-                        record.modalidad || '',
-                        record.fecha || '',
-                        record.hora || '',
-                        record.tipo_registro || ''
-                    ];
-            }
-            
+            // Modo normal: agregar campos según selección
             if (incluirCampos.includes('intervenciones')) {
                 row.push(
                     record.intervenciones_psicologicas || '0',
@@ -1431,29 +1023,10 @@ function prepareTableData() {
     });
 }
 
-function normalizeFullName(nombre, apellidoPaterno, apellidoMaterno) {
-    function capitalizeName(str) {
-        if (!str) return '';
-        return str.trim()
-            .toLowerCase()
-            .split(' ')
-            .map(word => {
-                if (word.length === 0) return '';
-                return word.charAt(0).toUpperCase() + word.slice(1);
-            })
-            .join(' ');
-    }
-    
-    const parts = [
-        capitalizeName(nombre),
-        capitalizeName(apellidoPaterno),
-        capitalizeName(apellidoMaterno)
-    ].filter(part => part !== '');
-    
-    return parts.join(' ');
-}
-
 function parseLinksFromGeneratedText(linksText) {
+    // Parsear el texto generado por el backend que viene en formato:
+    // "archivo1.pdf: https://drive.google.com/file/d/ID1/view\narchivo2.docx: https://drive.google.com/file/d/ID2/view"
+    
     const lines = linksText.split('\n');
     const linksData = [];
     
@@ -1476,7 +1049,30 @@ function getSelectedFields() {
     const checkboxes = document.querySelectorAll('input[name="incluir_campos[]"]:checked');
     return Array.from(checkboxes).map(cb => cb.value);
 }
-
+async function testEvidenceLinks(fechaDesde, fechaHasta) {
+    try {
+        showStatus('Probando generación de links de evidencias...', 'loading');
+        
+        const result = await makeBackendRequest('get_evidence_links', {
+            fechaDesde: fechaDesde,
+            fechaHasta: fechaHasta,
+            filtroTipoRegistro: 'salida'
+        });
+        
+        if (result.success) {
+            console.log('Links de evidencias generados:', result.data);
+            showStatus(`Se generaron links para ${result.totalRecords} registros con evidencias`, 'success');
+            return result.data;
+        } else {
+            throw new Error(result.message);
+        }
+        
+    } catch (error) {
+        console.error('Error probando links:', error);
+        showStatus('Error generando links: ' + error.message, 'error');
+        return [];
+    }
+}
 // ========== MODAL FUNCTIONS ==========
 
 function showDownloadModal(fechaDesde, fechaHasta) {
@@ -1487,43 +1083,10 @@ function showDownloadModal(fechaDesde, fechaHasta) {
     const filtroTipo = document.getElementById('filtro_tipo').value;
     const filtroModalidad = document.getElementById('filtro_modalidad').value;
     
-    const filtroUsuario = currentUser.isAdmin ? (document.getElementById('filtro_usuario')?.value || '') : '';
-    const ordenarPor = currentUser.isAdmin ? (document.getElementById('ordenar_por')?.value || '') : '';
-    const usuarioNombre = filtroUsuario && usersList.length > 0 
-        ? usersList.find(u => u.email === filtroUsuario)?.nombre || filtroUsuario
-        : '';
-    
-    let roleInfo = '';
-    if (currentUser.isAdmin) {
-        if (filtroUsuario) {
-            roleInfo = `<p><strong>👑 Ámbito:</strong> Usuario específico - ${usuarioNombre}</p>`;
-        } else {
-            roleInfo = '<p><strong>👑 Ámbito:</strong> Todos los usuarios del sistema</p>';
-        }
-    } else {
-        roleInfo = '<p><strong>👤 Ámbito:</strong> Solo sus registros personales</p>';
-    }
-    
-    let ordenInfo = '';
-    if (currentUser.isAdmin && ordenarPor) {
-        const ordenTexto = {
-            'nombre': 'Nombre',
-            'fecha': 'Fecha',
-            'tipo_estudiante': 'Tipo de Estudiante',
-            'modalidad': 'Modalidad',
-            'tipo_registro': 'Tipo de Registro'
-        };
-        ordenInfo = `<p><strong>📊 Ordenado por:</strong> ${ordenTexto[ordenarPor] || ordenarPor}</p>`;
-    } else if (!currentUser.isAdmin) {
-        ordenInfo = `<p><strong>📊 Ordenado por:</strong> Fecha (automático)</p>`;
-    }
-    
     reportInfo.innerHTML = `
-        <h4>✅ Resumen del Reporte</h4>
+        <h4>📊 Resumen del Reporte</h4>
         <p><strong>Período:</strong> ${fechaDesde} al ${fechaHasta}</p>
         <p><strong>Total de registros:</strong> ${attendanceData.length}</p>
-        ${roleInfo}
-        ${ordenInfo}
         <p><strong>Campos incluidos:</strong> ${incluirCampos.join(', ')}</p>
         ${filtroTipo ? `<p><strong>Filtro tipo:</strong> ${filtroTipo}</p>` : ''}
         ${filtroModalidad ? `<p><strong>Filtro modalidad:</strong> ${filtroModalidad}</p>` : ''}
@@ -1547,8 +1110,7 @@ function downloadPDF() {
         const url = URL.createObjectURL(pdfBlob);
         const a = document.createElement('a');
         a.href = url;
-        const rolePrefix = currentUser.isAdmin ? 'Admin' : 'Usuario';
-        a.download = `Reporte_${rolePrefix}_CESPSIC_${new Date().toISOString().split('T')[0]}.pdf`;
+        a.download = `Reporte_Asistencias_CESPSIC_${new Date().toISOString().split('T')[0]}.pdf`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
