@@ -1,8 +1,9 @@
-// Variables globales
+// ========== PARTE 1: VARIABLES Y CONFIGURACIÓN ==========
 let isAuthenticated = false;
 let currentUser = null;
 let attendanceData = [];
 let pdfBlob = null;
+let isAdmin = false;
 
 // CONFIGURACIÓN PRODUCCION
 const GOOGLE_CLIENT_ID = '799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.googleusercontent.com';
@@ -14,378 +15,279 @@ const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyN49EgjqFoE4
 //const SHEET_ID = '1YLmEuA-O3Vc1fWRQ1nC_BojOUSVmzBb8QxCCsb5tQwk';
 //const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzBJRaLjii8Y8F_9XC3_n5e--R2bzDXqrfWHeFUIYn3cRct-qVHZ1VEgJEj8XKEU9Ch/exec';
 
-// Usuarios autorizados para generar reportes
-const AUTHORIZED_USERS = [
-    'jose.lino.flores.madrigal@gmail.com',
-    'cepsic.atencionpsicologica@gmail.com',
-    'adymadrid.22@gmail.com',
-    'cespsic@uas.edu.mx'
-];
+const AUTHORIZED_USERS = ['jose.lino.flores.madrigal@gmail.com','cepsic.atencionpsicologica@gmail.com','adymadrid.22@gmail.com','cespsic@uas.edu.mx'];
+const ADMIN_USERS = ['jose.lino.flores.madrigal@gmail.com','cepsic.atencionpsicologica@gmail.com','cespsic@uas.edu.mx'];
 
-// Estado de autenticación
 let authenticationAttempts = 0;
 const MAX_AUTH_ATTEMPTS = 3;
+const FETCH_CONFIG = {timeout: 90000,maxRetries: 3,retryDelay: 2000};
 
-// Inicializar aplicación
+// ========== INICIALIZACIÓN ==========
 document.addEventListener('DOMContentLoaded', function() {
     console.log('=== DOM CARGADO ===');
-    console.log('CESPSIC Reportes v.2.0 - Autenticación mejorada');
-    console.log('Fecha/hora:', new Date().toISOString());
-    
     initializeApp();
 });
 
 function initializeApp() {
-    console.log('=== INICIANDO APLICACIÓN CESPSIC REPORTES v.2.0 ===');
-    console.log('MODO: Datos reales desde Google Sheets con permisos corregidos');
-    
-    // Verificar contenedor
     const container = document.getElementById('signin-button-container');
-    if (!container) {
-        console.error('ERROR: Contenedor signin-button-container no encontrado');
-        return;
-    }
-    
-    // Mostrar mensaje de carga
-    showLoadingMessage('Iniciando sistema de autenticación...');
-    
-    // Configurar eventos y fechas
+    if (!container) return;
+    showLoadingMessage('Iniciando...');
     setupEventListeners();
     setMaxDate();
-    
-    // Inicializar Google Sign-In con timeout
     initializeGoogleSignInWithRetry();
-    
-    // Verificar configuración
-    console.log('Configuración:');
-    console.log('- Client ID:', GOOGLE_CLIENT_ID ? 'Configurado' : 'NO CONFIGURADO');
-    console.log('- Script URL:', GOOGLE_SCRIPT_URL ? 'Configurado' : 'NO CONFIGURADO');
-    console.log('- Usuarios autorizados:', AUTHORIZED_USERS.length);
 }
 
-function showLoadingMessage(message) {
-    const container = document.getElementById('signin-button-container');
-    container.innerHTML = `
-        <div style="text-align: center; padding: 20px; color: #666;">
-            <div style="display: inline-block; animation: spin 1s linear infinite; margin-right: 10px;">🔄</div>
-            ${message}
-        </div>
-        <style>
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-        </style>
-    `;
+function showLoadingMessage(msg) {
+    document.getElementById('signin-button-container').innerHTML = `<div style="text-align:center;padding:20px;color:#666;"><div style="display:inline-block;animation:spin 1s linear infinite;">🔄</div>${msg}</div><style>@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}</style>`;
 }
 
 function initializeGoogleSignInWithRetry() {
     let attempts = 0;
-    const maxAttempts = 15;
-    
-    function tryInitialize() {
+    function tryInit() {
         attempts++;
-        console.log(`Intento ${attempts}/${maxAttempts} - Inicializando Google Sign-In...`);
-        
         if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
-            console.log('✅ Google Sign-In API disponible');
             initializeGoogleSignIn();
-        } else if (attempts < maxAttempts) {
-            console.log('⏳ Google API no disponible, reintentando...');
-            setTimeout(tryInitialize, 1000);
+        } else if (attempts < 15) {
+            setTimeout(tryInit, 1000);
         } else {
-            console.error('❌ Google Sign-In no se pudo cargar');
-            showAuthenticationError('No se pudo cargar el sistema de autenticación de Google');
+            showAuthenticationError('No se cargó Google Sign-In');
         }
     }
-    
-    tryInitialize();
+    tryInit();
 }
 
 function initializeGoogleSignIn() {
     try {
-        console.log('🔐 Configurando Google Sign-In...');
-        
-        google.accounts.id.initialize({
-            client_id: GOOGLE_CLIENT_ID,
-            callback: handleCredentialResponse,
-            auto_select: false,
-            cancel_on_tap_outside: true,
-            use_fedcm_for_prompt: false // Evitar doble autenticación
-        });
-
+        google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,callback:handleCredentialResponse,auto_select:false,cancel_on_tap_outside:true,use_fedcm_for_prompt:false});
         const container = document.getElementById("signin-button-container");
-        
-        // Limpiar contenedor
         container.innerHTML = '';
-        
-        // Renderizar botón
-        google.accounts.id.renderButton(container, {
-            theme: "filled_blue",
-            size: "large",
-            text: "signin_with",
-            shape: "rectangular",
-            logo_alignment: "left",
-            width: "280",
-            locale: "es"
-        });
-
-        console.log('✅ Google Sign-In inicializado correctamente');
-        
-        // Verificar backend después de la inicialización
+        google.accounts.id.renderButton(container, {theme:"filled_blue",size:"large",text:"signin_with",shape:"rectangular",logo_alignment:"left",width:"280",locale:"es"});
         setTimeout(checkBackendAvailability, 2000);
-
     } catch (error) {
-        console.error('❌ Error inicializando Google Sign-In:', error);
-        showAuthenticationError('Error configurando sistema de autenticación: ' + error.message);
+        showAuthenticationError('Error: ' + error.message);
     }
 }
 
 async function checkBackendAvailability() {
     try {
-        console.log('🔗 Verificando disponibilidad del backend...');
-        
-        const response = await fetchWithTimeout(GOOGLE_SCRIPT_URL + '?action=test_permissions', 10000);
-        
+        const response = await fetchWithTimeoutAndRetry(GOOGLE_SCRIPT_URL + '?action=test_permissions', {method:'GET'});
         if (response.ok) {
-            console.log('✅ Backend disponible');
-            showStatus('Sistema listo para su uso', 'success');
+            showStatus('Sistema listo', 'success');
             setTimeout(() => hideStatus(), 3000);
-        } else {
-            console.warn('⚠️ Backend no responde correctamente');
-            showStatus('Advertencia: Conexión con backend limitada', 'error');
         }
-        
     } catch (error) {
-        console.warn('⚠️ No se pudo verificar backend:', error.message);
-        showStatus('Advertencia: Verificación de backend falló', 'error');
+        console.warn('Backend warning:', error.message);
     }
 }
 
+// ========== AUTENTICACIÓN ==========
 function handleCredentialResponse(response) {
     try {
         authenticationAttempts++;
-        console.log(`🔐 Procesando autenticación (intento ${authenticationAttempts})...`);
-        
         if (authenticationAttempts > MAX_AUTH_ATTEMPTS) {
-            showStatus('Demasiados intentos de autenticación. Recargue la página.', 'error');
+            showStatus('Demasiados intentos', 'error');
             return;
         }
-        
         const userInfo = parseJwt(response.credential);
-        
-        if (!userInfo) {
-            throw new Error('No se pudo procesar la información del usuario');
-        }
-        
-        console.log('👤 Usuario detectado:', userInfo.email);
-        
-        // Verificar autorización
+        if (!userInfo) throw new Error('No se procesó usuario');
         if (!AUTHORIZED_USERS.includes(userInfo.email)) {
-            showStatus(`❌ Acceso denegado. El email ${userInfo.email} no está autorizado.`, 'error');
+            showStatus(`Acceso denegado: ${userInfo.email}`, 'error');
             return;
         }
-        
-        // Verificar email verificado
         if (!userInfo.email_verified) {
-            showStatus('❌ Cuenta no verificada. Use una cuenta de Gmail verificada.', 'error');
+            showStatus('Cuenta no verificada', 'error');
             return;
         }
-        
-        // Configurar usuario
-        currentUser = {
-            id: userInfo.sub,
-            email: userInfo.email,
-            name: userInfo.name,
-            picture: userInfo.picture,
-            email_verified: userInfo.email_verified
-        };
-
+        isAdmin = ADMIN_USERS.includes(userInfo.email);
+        currentUser = {id:userInfo.sub,email:userInfo.email,name:userInfo.name,picture:userInfo.picture,email_verified:userInfo.email_verified,isAdmin:isAdmin};
         isAuthenticated = true;
-        
-        console.log('✅ Autenticación exitosa para:', currentUser.name);
-        
-        // Actualizar UI
         updateAuthenticationUI();
         enableForm();
-        
-        // Probar permisos del backend
+        if (isAdmin) showAdminControls();
         setTimeout(() => testBackendPermissions(), 1000);
-        
-        showStatus(`Bienvenido ${currentUser.name}! Acceso autorizado.`, 'success');
+        showStatus(`Bienvenido ${currentUser.name}!${isAdmin?' (Admin)':''}`, 'success');
         setTimeout(() => hideStatus(), 4000);
-
     } catch (error) {
-        console.error('❌ Error procesando credenciales:', error);
-        showStatus('Error en la autenticación: ' + error.message, 'error');
+        showStatus('Error: ' + error.message, 'error');
+    }
+}
+
+function showAdminControls() {
+    const adminSection = document.getElementById('admin-controls-section');
+    if (adminSection) adminSection.style.display = 'block';
+    const evidenciasCheckbox = document.querySelector('.checkbox-evidencias');
+    if (evidenciasCheckbox) evidenciasCheckbox.style.display = 'flex';
+    setupAdminFilters();
+}
+
+function setupAdminFilters() {
+    const fechaDesde = document.getElementById('fecha_desde');
+    const fechaHasta = document.getElementById('fecha_hasta');
+    if (fechaDesde && fechaHasta) {
+        fechaDesde.addEventListener('change', updateUserFilter);
+        fechaHasta.addEventListener('change', updateUserFilter);
+    }
+    updateUserFilter();
+}
+
+async function updateUserFilter() {
+    if (!isAdmin) return;
+    const fechaDesde = document.getElementById('fecha_desde').value;
+    const fechaHasta = document.getElementById('fecha_hasta').value;
+    const userSelect = document.getElementById('filtro_usuario');
+    if (!fechaDesde || !fechaHasta || !userSelect) return;
+    try {
+        showStatus('Cargando usuarios...', 'loading');
+        const result = await makeBackendRequestWithRetry('get_users_in_range', {fechaDesde,fechaHasta});
+        if (result.success && result.users) {
+            userSelect.innerHTML = '<option value="">Todos los usuarios</option>';
+            result.users.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user;
+                option.textContent = user;
+                userSelect.appendChild(option);
+            });
+            hideStatus();
+        }
+    } catch (error) {
+        console.error('Error usuarios:', error);
+        hideStatus();
     }
 }
 
 async function testBackendPermissions() {
     try {
-        console.log('🔍 Probando permisos del backend...');
-        showStatus('Verificando permisos del sistema...', 'loading');
-        
-        const testResult = await makeBackendRequest('test_permissions', {});
-        
+        showStatus('Verificando...', 'loading');
+        const testResult = await makeBackendRequestWithRetry('test_permissions', {});
         if (testResult.success) {
-            console.log('✅ Prueba de permisos exitosa');
             const failedTests = Object.values(testResult.tests || {}).filter(test => !test.success);
-            
-            if (failedTests.length === 0) {
-                showStatus('Sistema completamente funcional', 'success');
-            } else {
-                console.warn('⚠️ Algunas pruebas fallaron:', failedTests);
-                showStatus(`Advertencia: ${failedTests.length} componentes con problemas`, 'error');
-            }
+            showStatus(failedTests.length === 0 ? 'Sistema OK' : `${failedTests.length} problemas`, failedTests.length === 0 ? 'success' : 'error');
         } else {
-            console.error('❌ Prueba de permisos falló:', testResult.message);
-            showStatus('Error en permisos: ' + testResult.message, 'error');
+            showStatus('Error: ' + testResult.message, 'error');
         }
-        
         setTimeout(() => hideStatus(), 5000);
-        
     } catch (error) {
-        console.error('❌ Error probando permisos:', error);
-        showStatus('No se pudieron verificar los permisos del sistema', 'error');
+        showStatus('No verificado', 'error');
     }
+}
+
+// ========== COMUNICACIÓN BACKEND ==========
+async function makeBackendRequestWithRetry(action, additionalData = {}) {
+    let lastError = null;
+    for (let attempt = 1; attempt <= FETCH_CONFIG.maxRetries; attempt++) {
+        try {
+            console.log(`🔄 Intento ${attempt}/${FETCH_CONFIG.maxRetries}: ${action}`);
+            const result = await makeBackendRequest(action, additionalData);
+            console.log('✅ OK');
+            return result;
+        } catch (error) {
+            lastError = error;
+            console.warn(`⚠️ Intento ${attempt} falló:`, error.message);
+            if (attempt < FETCH_CONFIG.maxRetries) {
+                const delay = FETCH_CONFIG.retryDelay * attempt;
+                await sleep(delay);
+            }
+        }
+    }
+    throw new Error(`Error tras ${FETCH_CONFIG.maxRetries} intentos: ${lastError.message}`);
 }
 
 async function makeBackendRequest(action, additionalData = {}) {
-    const requestData = {
-        action: action,
-        userEmail: currentUser.email,
-        timestamp: new Date().toISOString(),
-        ...additionalData
-    };
-    
-    console.log('📡 Enviando solicitud al backend:', action);
-    
-    // Intentar con JSONP primero
+    const requestData = {action,userEmail:currentUser.email,timestamp:new Date().toISOString(),...additionalData};
     try {
-        const jsonpResponse = await fetchWithJSONP(GOOGLE_SCRIPT_URL, requestData);
-        if (jsonpResponse && jsonpResponse.success !== undefined) {
-            console.log('✅ Respuesta JSONP exitosa');
-            return jsonpResponse;
-        }
+        const jsonpResponse = await fetchWithJSONP(GOOGLE_SCRIPT_URL, requestData, FETCH_CONFIG.timeout);
+        if (jsonpResponse && jsonpResponse.success !== undefined) return jsonpResponse;
     } catch (jsonpError) {
-        console.log('⚠️ JSONP falló:', jsonpError.message);
+        console.log('⚠️ JSONP falló');
     }
-    
-    // Intentar con fetch POST
     try {
-        const response = await fetchWithTimeout(GOOGLE_SCRIPT_URL, 30000, {
-            method: 'POST',
-            mode: 'cors',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(requestData)
-        });
-        
+        const response = await fetchWithTimeoutAndRetry(GOOGLE_SCRIPT_URL, {method:'POST',mode:'cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(requestData)});
         if (response.ok) {
-            const result = await response.json();
-            console.log('✅ Respuesta POST exitosa');
-            return result;
+            return await response.json();
         } else {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            throw new Error(`HTTP ${response.status}`);
         }
     } catch (fetchError) {
-        console.log('⚠️ Fetch POST falló:', fetchError.message);
-        throw new Error('No se pudo conectar con el servidor: ' + fetchError.message);
+        throw new Error('No conectó: ' + fetchError.message);
     }
 }
 
-async function fetchWithJSONP(url, data, timeout = 30000) {
+async function fetchWithTimeoutAndRetry(url, options = {}) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_CONFIG.timeout);
+    try {
+        const response = await fetch(url, {...options,signal:controller.signal});
+        clearTimeout(timeoutId);
+        return response;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        if (error.name === 'AbortError') throw new Error(`Timeout ${FETCH_CONFIG.timeout}ms`);
+        throw error;
+    }
+}
+
+async function fetchWithJSONP(url, data, timeout = 90000) {
     return new Promise((resolve, reject) => {
         const callbackName = 'jsonp_callback_' + Math.round(100000 * Math.random());
-        
         const script = document.createElement('script');
-        const params = new URLSearchParams({
-            ...data,
-            callback: callbackName
-        });
-        
+        const params = new URLSearchParams({...data,callback:callbackName});
         window[callbackName] = function(response) {
             cleanup();
             resolve(response);
         };
-        
         function cleanup() {
             delete window[callbackName];
-            if (script.parentNode) {
-                script.parentNode.removeChild(script);
-            }
+            if (script.parentNode) script.parentNode.removeChild(script);
         }
-        
         const timeoutId = setTimeout(() => {
             cleanup();
-            reject(new Error('Timeout: No se recibió respuesta del servidor'));
+            reject(new Error(`Timeout JSONP`));
         }, timeout);
-        
         script.onload = () => clearTimeout(timeoutId);
         script.onerror = () => {
             cleanup();
             clearTimeout(timeoutId);
-            reject(new Error('Error cargando script del servidor'));
+            reject(new Error('Error script'));
         };
-        
         script.src = `${url}?${params.toString()}`;
         document.head.appendChild(script);
     });
 }
 
-async function fetchWithTimeout(url, timeout = 10000, options = {}) {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), timeout);
-    
-    try {
-        const response = await fetch(url, {
-            ...options,
-            signal: controller.signal
-        });
-        clearTimeout(id);
-        return response;
-    } catch (error) {
-        clearTimeout(id);
-        throw error;
-    }
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function parseJwt(token) {
     try {
         const base64Url = token.split('.')[1];
         const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-        }).join(''));
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
         return JSON.parse(jsonPayload);
     } catch (error) {
-        console.error('Error parsing JWT:', error);
         return null;
     }
 }
 
+// ========== UI ==========
 function updateAuthenticationUI() {
     const authSection = document.getElementById('auth-section');
     const authTitle = document.getElementById('auth-title');
     const userInfo = document.getElementById('user-info');
     const signinContainer = document.getElementById('signin-button-container');
-
     if (isAuthenticated && currentUser) {
         authSection.classList.add('authenticated');
-        authTitle.textContent = '✅ Acceso Autorizado';
+        authTitle.textContent = `✅ Autorizado ${isAdmin?'(Admin)':''}`;
         authTitle.classList.add('authenticated');
-
         document.getElementById('user-avatar').src = currentUser.picture;
         document.getElementById('user-email').textContent = currentUser.email;
         document.getElementById('user-name').textContent = currentUser.name;
+        document.getElementById('user-status').textContent = isAdmin ? '👑 Administrador' : '✅ Autorizado';
         userInfo.classList.add('show');
-
         signinContainer.style.display = 'none';
     } else {
         authSection.classList.remove('authenticated');
-        authTitle.textContent = '🔒 Autenticación Administrativa Requerida';
+        authTitle.textContent = '🔒 Autenticación Requerida';
         authTitle.classList.remove('authenticated');
         userInfo.classList.remove('show');
         signinContainer.style.display = 'block';
@@ -393,23 +295,20 @@ function updateAuthenticationUI() {
 }
 
 function enableForm() {
-    const formContainer = document.getElementById('form-container');
-    formContainer.classList.add('authenticated');
+    document.getElementById('form-container').classList.add('authenticated');
     updateSubmitButton();
 }
 
 function disableForm() {
-    const formContainer = document.getElementById('form-container');
-    formContainer.classList.remove('authenticated');
+    document.getElementById('form-container').classList.remove('authenticated');
     updateSubmitButton();
 }
 
 function updateSubmitButton() {
     const submitBtn = document.getElementById('submit_btn');
-    
     if (!isAuthenticated) {
         submitBtn.disabled = true;
-        submitBtn.textContent = '🔒 Autentíquese primero para generar reporte';
+        submitBtn.textContent = '🔒 Autentíquese primero';
     } else {
         submitBtn.disabled = false;
         submitBtn.innerHTML = '📋 Generar Reporte PDF';
@@ -417,18 +316,7 @@ function updateSubmitButton() {
 }
 
 function showAuthenticationError(message) {
-    const container = document.getElementById("signin-button-container");
-    container.innerHTML = `
-        <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 8px; padding: 15px; color: #721c24;">
-            <strong>❌ Error de Autenticación</strong><br>
-            ${message}
-            <div style="margin-top: 15px;">
-                <button onclick="location.reload()" style="background: #dc3545; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
-                    🔄 Recargar Página
-                </button>
-            </div>
-        </div>
-    `;
+    document.getElementById("signin-button-container").innerHTML = `<div style="background:#f8d7da;border:1px solid #f5c6cb;border-radius:8px;padding:15px;color:#721c24;"><strong>❌ Error</strong><br>${message}<div style="margin-top:15px;"><button onclick="location.reload()" style="background:#dc3545;color:white;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;">🔄 Recargar</button></div></div>`;
 }
 
 function signOut() {
@@ -436,76 +324,65 @@ function signOut() {
         if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
             google.accounts.id.disableAutoSelect();
         }
-        
         isAuthenticated = false;
         currentUser = null;
         attendanceData = [];
         pdfBlob = null;
         authenticationAttempts = 0;
-
+        isAdmin = false;
         updateAuthenticationUI();
         disableForm();
         closeModal();
-
-        showStatus('Sesión cerrada correctamente.', 'success');
+        const adminSection = document.getElementById('admin-controls-section');
+        if (adminSection) adminSection.style.display = 'none';
+        const evidenciasCheckbox = document.querySelector('.checkbox-evidencias');
+        if (evidenciasCheckbox) evidenciasCheckbox.style.display = 'none';
+        showStatus('Sesión cerrada', 'success');
         setTimeout(() => {
             hideStatus();
-            // Reinicializar después de cerrar sesión
             setTimeout(() => initializeGoogleSignIn(), 1000);
         }, 2000);
-
     } catch (error) {
-        console.error('Error cerrando sesión:', error);
-        showStatus('Error al cerrar sesión.', 'error');
+        showStatus('Error cerrando', 'error');
     }
 }
 
-// ========== FORM HANDLING ==========
+function showStatus(message, type) {
+    const status = document.getElementById('status');
+    status.innerHTML = message.replace(/\n/g, '<br>');
+    status.className = `status ${type}`;
+    status.style.display = 'block';
+}
+
+function hideStatus() {
+    document.getElementById('status').style.display = 'none';
+}
 
 function setMaxDate() {
-    const todayInCuliacan = new Date().toLocaleDateString('en-CA', {
-        timeZone: 'America/Mazatlan'
-    });
-    
-    document.getElementById('fecha_hasta').max = todayInCuliacan;
-    document.getElementById('fecha_hasta').value = todayInCuliacan;
-    
-    const today = new Date(todayInCuliacan);
-    const oneMonthAgo = new Date(today);
-    oneMonthAgo.setMonth(today.getMonth() - 1);
-    const oneMonthAgoStr = oneMonthAgo.toISOString().split('T')[0];
-    document.getElementById('fecha_desde').value = oneMonthAgoStr;
-    
-    console.log('Fechas configuradas para Culiacán, Sinaloa');
+    const today = new Date().toLocaleDateString('en-CA', {timeZone:'America/Mazatlan'});
+    document.getElementById('fecha_hasta').max = today;
+    document.getElementById('fecha_hasta').value = today;
+    const todayDate = new Date(today);
+    const oneMonthAgo = new Date(todayDate);
+    oneMonthAgo.setMonth(todayDate.getMonth() - 1);
+    document.getElementById('fecha_desde').value = oneMonthAgo.toISOString().split('T')[0];
 }
 
 function setupEventListeners() {
     document.getElementById('fecha_desde').addEventListener('change', validateDates);
     document.getElementById('fecha_hasta').addEventListener('change', validateDates);
     document.getElementById('reportForm').addEventListener('submit', handleFormSubmit);
-    
-    // Agregar listeners para el comportamiento de checkboxes
     setupCheckboxListeners();
 }
 
 function setupCheckboxListeners() {
-    // Listener para cuando se marcan otros checkboxes (desmarcar evidencias_solo)
-    const otherCheckboxes = [
-        'incluir_intervenciones', 
-        'incluir_actividades', 
-        'incluir_evidencias', 
-        'incluir_comentarios', 
-        'incluir_permisos'
-    ];
-    
-    otherCheckboxes.forEach(id => {
+    ['incluir_intervenciones','incluir_actividades','incluir_evidencias','incluir_comentarios','incluir_permisos'].forEach(id => {
         const checkbox = document.getElementById(id);
         if (checkbox) {
             checkbox.addEventListener('change', function() {
                 if (this.checked) {
-                    // Si se marca cualquier otro checkbox, desmarcar evidencias_solo
                     const evidenciasSolo = document.getElementById('incluir_evidencias_solo');
-                    if (evidenciasSolo.checked) {
+                    if (evidenciasSolo && evidenciasSolo.checked) {
                         evidenciasSolo.checked = false;
                         updateCheckboxStyles();
                     }
@@ -516,46 +393,27 @@ function setupCheckboxListeners() {
 }
 
 function handleEvidenciasChange(checkbox) {
-    const isChecked = checkbox.checked;
-    
-    // Lista de checkboxes que se deben desmarcar cuando se marca "Solo Evidencias"
-    const otherCheckboxes = [
-        'incluir_intervenciones', 
-        'incluir_actividades', 
-        'incluir_evidencias', 
-        'incluir_comentarios', 
-        'incluir_permisos'
-    ];
-    
-    if (isChecked) {
-        // Desmarcar todos los otros checkboxes
-        otherCheckboxes.forEach(id => {
+    if (checkbox.checked) {
+        ['incluir_intervenciones','incluir_actividades','incluir_evidencias','incluir_comentarios','incluir_permisos'].forEach(id => {
             const cb = document.getElementById(id);
-            if (cb) {
-                cb.checked = false;
-            }
+            if (cb) cb.checked = false;
         });
-        
-        // Mensaje actualizado para incluir generación de links
-        showStatus('Modo "Solo Evidencias de Salida" activado. Se filtrarán únicamente registros de SALIDA. Se generarán automáticamente los links a los archivos de Drive y serán clickeables en el PDF.', 'loading');
+        showStatus('Modo "Solo Evidencias" activado', 'loading');
         setTimeout(() => hideStatus(), 6000);
     }
-    
     updateCheckboxStyles();
 }
 
-// Hacer la función disponible globalmente para el HTML
 window.handleEvidenciasChange = handleEvidenciasChange;
 
 function updateCheckboxStyles() {
     const evidenciasSolo = document.getElementById('incluir_evidencias_solo');
     const evidenciasItem = document.querySelector('.checkbox-evidencias');
-    
-    if (evidenciasSolo.checked) {
+    if (evidenciasSolo && evidenciasSolo.checked && evidenciasItem) {
         evidenciasItem.style.background = '#e8f5e8';
         evidenciasItem.style.borderColor = '#4caf50';
-        evidenciasItem.style.boxShadow = '0 2px 8px rgba(76, 175, 80, 0.2)';
-    } else {
+        evidenciasItem.style.boxShadow = '0 2px 8px rgba(76,175,80,0.2)';
+    } else if (evidenciasItem) {
         evidenciasItem.style.background = '';
         evidenciasItem.style.borderColor = '';
         evidenciasItem.style.boxShadow = '';
@@ -566,334 +424,167 @@ function validateDates() {
     const fechaDesde = document.getElementById('fecha_desde').value;
     const fechaHasta = document.getElementById('fecha_hasta').value;
     const today = new Date().toISOString().split('T')[0];
-    
     if (fechaHasta > today) {
-        showStatus('La fecha hasta no puede ser mayor al día actual.', 'error');
+        showStatus('Fecha futura no válida', 'error');
         document.getElementById('fecha_hasta').value = today;
         return false;
     }
-    
     if (fechaDesde && fechaHasta && fechaDesde > fechaHasta) {
-        showStatus('La fecha desde no puede ser mayor a la fecha hasta.', 'error');
+        showStatus('Rango de fechas inválido', 'error');
         document.getElementById('fecha_desde').value = fechaHasta;
         return false;
     }
-    
     hideStatus();
     return true;
 }
 
 async function handleFormSubmit(e) {
     e.preventDefault();
-    
     if (!isAuthenticated || !currentUser) {
-        showStatus('Debe autenticarse antes de generar reportes.', 'error');
+        showStatus('Debe autenticarse', 'error');
         return;
     }
-    
     const fechaDesde = document.getElementById('fecha_desde').value;
     const fechaHasta = document.getElementById('fecha_hasta').value;
-    
-    if (!fechaDesde || !fechaHasta) {
-        showStatus('Por favor, seleccione ambas fechas (desde y hasta).', 'error');
-        return;
-    }
-    
-    if (!validateDates()) {
-        return;
-    }
-    
+    if (!fechaDesde || !fechaHasta || !validateDates()) return;
     const checkboxes = document.querySelectorAll('input[name="incluir_campos[]"]:checked');
     if (checkboxes.length === 0) {
-        showStatus('Debe seleccionar al menos un campo para incluir en el reporte.', 'error');
+        showStatus('Seleccione campos', 'error');
         return;
     }
-    
-    // Confirmar generación
     const selectedFields = Array.from(checkboxes).map(cb => cb.nextElementSibling.textContent.split('(')[0].trim());
     const filtroTipo = document.getElementById('filtro_tipo').value;
     const filtroModalidad = document.getElementById('filtro_modalidad').value;
     const incluirCampos = getSelectedFields();
     const isModoEvidencias = incluirCampos.includes('evidencias_solo');
-    
-    let confirmMessage = `¿Está seguro de que desea generar el reporte?
-
-Período: ${fechaDesde} al ${fechaHasta}
-Campos: ${selectedFields.join(', ')}`;
-    
-    if (isModoEvidencias) {
-        confirmMessage += `\nModo: Solo evidencias de SALIDA`;
-    }
-    if (filtroTipo) confirmMessage += `\nTipo: ${filtroTipo}`;
-    if (filtroModalidad) confirmMessage += `\nModalidad: ${filtroModalidad}`;
-    
-    if (!confirm(confirmMessage)) {
-        return;
-    }
-    
-    showStatus('Conectando con Google Sheets...', 'loading');
+    const filtroUsuario = isAdmin ? document.getElementById('filtro_usuario')?.value : '';
+    const ordenamiento = isAdmin ? document.getElementById('orden_datos')?.value : 'nombre';
+    let confirmMsg = `¿Generar?\n\n${fechaDesde} al ${fechaHasta}\nCampos: ${selectedFields.join(', ')}`;
+    if (isModoEvidencias) confirmMsg += `\nModo: SALIDAS`;
+    if (filtroTipo) confirmMsg += `\nTipo: ${filtroTipo}`;
+    if (filtroModalidad) confirmMsg += `\nModalidad: ${filtroModalidad}`;
+    if (filtroUsuario) confirmMsg += `\nUsuario: ${filtroUsuario}`;
+    if (ordenamiento) confirmMsg += `\nOrden: ${ordenamiento}`;
+    if (!confirm(confirmMsg)) return;
+    showStatus('Conectando (90s max)...', 'loading');
     const submitBtn = document.getElementById('submit_btn');
     submitBtn.disabled = true;
     submitBtn.textContent = 'Conectando...';
-    
     try {
-        // Intentar obtener datos reales
-        await fetchAttendanceData(fechaDesde, fechaHasta);
-        
-        // Verificar si hay datos después del filtrado
+        await fetchAttendanceData(fechaDesde, fechaHasta, filtroUsuario, ordenamiento);
         if (!attendanceData || attendanceData.length === 0) {
-            showStatus(
-                isModoEvidencias 
-                    ? 'No se encontraron registros de SALIDA con evidencias en el rango de fechas seleccionado. Intente ampliar el rango de fechas o verificar los filtros.'
-                    : 'No se encontraron registros en el rango de fechas seleccionado. Intente ampliar el rango de fechas o verificar los filtros.',
-                'error'
-            );
+            showStatus(isModoEvidencias ? 'Sin SALIDAS con evidencias' : 'Sin registros', 'error');
             updateSubmitButton();
             return;
         }
-        
-        showStatus(`Generando PDF con ${attendanceData.length} registros reales...`, 'loading');
+        showStatus(`Generando PDF (${attendanceData.length})...`, 'loading');
         submitBtn.textContent = 'Generando PDF...';
-        
-        // Generar PDF solo con datos reales
         await generatePDF(fechaDesde, fechaHasta);
-        
         showDownloadModal(fechaDesde, fechaHasta);
         hideStatus();
         updateSubmitButton();
-        
     } catch (error) {
-        console.error('Error generando reporte:', error);
-        
-        // Mostrar mensaje específico según el tipo de error
-        let errorMessage = 'Error al generar el reporte: ';
-        
-        if (error.message.includes('conectar con Google Sheets')) {
-            errorMessage += 'No se pudo conectar con Google Sheets. Verifique su conexión a internet y que el sistema tenga los permisos necesarios.';
-        } else if (error.message.includes('No se pudieron obtener los datos del servidor')) {
-            errorMessage += 'El servidor no pudo procesar la solicitud. Intente nuevamente en unos momentos.';
-        } else if (error.message.includes('Usuario no autorizado')) {
-            errorMessage += 'Su sesión ha expirado o no tiene permisos. Cierre sesión y vuelva a autenticarse.';
+        console.error('Error:', error);
+        let errorMsg = 'Error: ';
+        if (error.message.includes('intentos')) {
+            errorMsg += 'Sin respuesta tras reintentos.\n• Verifique conexión\n• Intente rango menor\n• Espere 1-2 min';
+        } else if (error.message.includes('Timeout')) {
+            errorMsg += 'Timeout. Intente rango menor.';
         } else {
-            errorMessage += error.message;
+            errorMsg += error.message;
         }
-        
-        showStatus(errorMessage, 'error');
+        showStatus(errorMsg, 'error');
         updateSubmitButton();
     }
 }
 
-async function fetchAttendanceData(fechaDesde, fechaHasta) {
-    console.log('=== OBTENIENDO DATOS DE ASISTENCIA ===');
-    
+async function fetchAttendanceData(fechaDesde, fechaHasta, filtroUsuario = '', ordenamiento = 'nombre') {
     try {
         const incluirCampos = getSelectedFields();
         const isModoEvidencias = incluirCampos.includes('evidencias_solo');
-        
-        const result = await makeBackendRequest('get_attendance_data', {
-            fechaDesde: fechaDesde,
-            fechaHasta: fechaHasta,
-            filtroTipo: document.getElementById('filtro_tipo').value,
-            filtroModalidad: document.getElementById('filtro_modalidad').value,
-            filtroTipoRegistro: isModoEvidencias ? 'salida' : '',
-            modoEvidencias: isModoEvidencias
+        const result = await makeBackendRequestWithRetry('get_attendance_data', {
+            fechaDesde,fechaHasta,
+            filtroTipo:document.getElementById('filtro_tipo').value,
+            filtroModalidad:document.getElementById('filtro_modalidad').value,
+            filtroTipoRegistro:isModoEvidencias?'salida':'',
+            filtroUsuario,ordenamiento,modoEvidencias:isModoEvidencias
         });
-        
         if (result.success && result.data) {
-            // Verificar si los datos son reales o de ejemplo
-            if (result.dataSource === 'sample_data') {
-                throw new Error('No se pudo conectar con Google Sheets. Verifique la conexión y permisos.');
-            }
-            
+            if (result.dataSource === 'sample_data') throw new Error('No conectó Sheets');
             attendanceData = result.data;
-            
-            // Filtro adicional en frontend para modo evidencias
             if (isModoEvidencias) {
-                attendanceData = attendanceData.filter(record => 
-                    record.tipo_registro && record.tipo_registro.toLowerCase() === 'salida'
-                );
-                console.log(`Modo evidencias activo - Filtrando solo "salidas": ${attendanceData.length} registros`);
+                attendanceData = attendanceData.filter(r => r.tipo_registro && r.tipo_registro.toLowerCase() === 'salida');
             }
-            
-            console.log(`Datos reales obtenidos: ${attendanceData.length} registros`);
+            if (isAdmin && ordenamiento) {
+                attendanceData = sortAttendanceData(attendanceData, ordenamiento);
+            }
         } else {
-            throw new Error(result.message || 'No se pudieron obtener los datos del servidor');
+            throw new Error(result.message || 'Error servidor');
         }
-        
     } catch (error) {
-        console.error('Error obteniendo datos:', error);
-        
-        // No usar datos de ejemplo - mostrar error
         attendanceData = [];
-        throw new Error('Error de conexión: ' + error.message);
+        throw new Error('Conexión: ' + error.message);
     }
 }
 
-function generateSampleData(fechaDesde, fechaHasta) {
-    const tiposEstudiante = ['servicio_social', 'practicas_supervisadas', 'estancia_profesional'];
-    const modalidades = ['presencial', 'virtual'];
-    const nombres = ['Juan', 'María', 'Carlos', 'Ana', 'Luis', 'Carmen'];
-    const apellidosP = ['Pérez', 'López', 'García', 'Martínez', 'González'];
-    const apellidosM = ['Silva', 'Morales', 'Jiménez', 'Ruiz', 'Díaz'];
-    
-    const sampleData = [];
-    const fechaInicio = new Date(fechaDesde);
-    const fechaFin = new Date(fechaHasta);
-    const diasDiferencia = Math.ceil((fechaFin - fechaInicio) / (1000 * 60 * 60 * 24)) + 1;
-    
-    const numRegistros = Math.min(Math.max(3, diasDiferencia), 8);
-    
-    for (let i = 0; i < numRegistros; i++) {
-        const fechaRandom = new Date(fechaInicio.getTime() + Math.random() * (fechaFin.getTime() - fechaInicio.getTime()));
-        const fechaStr = fechaRandom.toISOString().split('T')[0];
-        
-        const record = {
-            nombre: nombres[Math.floor(Math.random() * nombres.length)],
-            apellido_paterno: apellidosP[Math.floor(Math.random() * apellidosP.length)],
-            apellido_materno: apellidosM[Math.floor(Math.random() * apellidosM.length)],
-            tipo_estudiante: tiposEstudiante[Math.floor(Math.random() * tiposEstudiante.length)],
-            modalidad: modalidades[Math.floor(Math.random() * modalidades.length)],
-            fecha: fechaStr,
-            hora: i % 2 === 0 ? '08:00' : '14:30',
-            tipo_registro: 'entrada',
-            intervenciones_psicologicas: String(Math.floor(Math.random() * 5) + 1),
-            ninos_ninas: String(Math.floor(Math.random() * 3)),
-            adolescentes: String(Math.floor(Math.random() * 3)),
-            adultos: String(Math.floor(Math.random() * 3)),
-            mayores_60: String(Math.floor(Math.random() * 2)),
-            familia: String(Math.floor(Math.random() * 2)),
-            actividades_realizadas: 'Entrevista psicológica, Sesiones terapéuticas',
-            total_evidencias: String(Math.floor(Math.random() * 4)),
-            // CAMPOS ACTUALIZADOS PARA EVIDENCIAS
-            nombres_evidencias: `Documento_${i+1}.pdf, Evidencia_${i+1}.docx, Reporte_${i+1}.pdf`,
-            carpeta_evidencias: `Carpeta_Estudiante_${i+1}`,
-            comentarios_adicionales: `Registro de ejemplo ${i + 1} - Datos de demostración`,
-            actividades_varias_detalle: '',
-            pruebas_psicologicas_detalle: 'MMPI-2, WAIS-IV',
-            permiso_detalle: '',
-            otro_detalle: ''
-        };
-        
-        sampleData.push(record);
-    }
-    
-    // Aplicar filtros
-    const filtroTipo = document.getElementById('filtro_tipo').value;
-    const filtroModalidad = document.getElementById('filtro_modalidad').value;
-    
-    return sampleData.filter(record => {
-        if (filtroTipo && record.tipo_estudiante !== filtroTipo) return false;
-        if (filtroModalidad && record.modalidad !== filtroModalidad) return false;
-        return true;
-    });
+function sortAttendanceData(data, ordenamiento) {
+    const sorted = [...data];
+    const getNombre = (r) => `${r.nombre} ${r.apellido_paterno} ${r.apellido_materno}`.trim().toLowerCase();
+    const comparators = {
+        nombre: (a,b) => getNombre(a).localeCompare(getNombre(b)) || a.fecha.localeCompare(b.fecha) || (a.tipo_estudiante||'').localeCompare(b.tipo_estudiante||'') || (a.modalidad||'').localeCompare(b.modalidad||'') || (a.tipo_registro||'').localeCompare(b.tipo_registro||''),
+        fecha: (a,b) => a.fecha.localeCompare(b.fecha) || (a.tipo_estudiante||'').localeCompare(b.tipo_estudiante||'') || (a.modalidad||'').localeCompare(b.modalidad||'') || getNombre(a).localeCompare(getNombre(b)) || (a.tipo_registro||'').localeCompare(b.tipo_registro||''),
+        tipo_estudiante: (a,b) => (a.tipo_estudiante||'').localeCompare(b.tipo_estudiante||'') || a.fecha.localeCompare(b.fecha) || (a.modalidad||'').localeCompare(b.modalidad||'') || getNombre(a).localeCompare(getNombre(b)) || (a.tipo_registro||'').localeCompare(b.tipo_registro||''),
+        modalidad: (a,b) => (a.modalidad||'').localeCompare(b.modalidad||'') || (a.tipo_estudiante||'').localeCompare(b.tipo_estudiante||'') || a.fecha.localeCompare(b.fecha) || getNombre(a).localeCompare(getNombre(b)) || (a.tipo_registro||'').localeCompare(b.tipo_registro||''),
+        tipo_registro: (a,b) => (a.tipo_registro||'').localeCompare(b.tipo_registro||'') || a.fecha.localeCompare(b.fecha) || (a.tipo_estudiante||'').localeCompare(b.tipo_estudiante||'') || (a.modalidad||'').localeCompare(b.modalidad||'') || getNombre(a).localeCompare(getNombre(b))
+    };
+    sorted.sort(comparators[ordenamiento] || comparators.nombre);
+    return sorted;
 }
 
-// ========== PDF GENERATION ==========
 async function generatePDF(fechaDesde, fechaHasta) {
-    const { jsPDF } = window.jspdf;
+    const {jsPDF} = window.jspdf;
     const doc = new jsPDF('l', 'mm', 'a4');
-    
     doc.setFont('helvetica');
     addPDFHeader(doc, fechaDesde, fechaHasta);
-    
     const tableData = prepareTableData();
     const incluirCampos = getSelectedFields();
     const isModoEvidencias = incluirCampos.includes('evidencias_solo');
-    
     if (isModoEvidencias) {
-        // Preparar datos para modo evidencias con links clickeables
         const headers = getTableHeaders();
-        const processedData = [];
-        
-        tableData.forEach(row => {
+        const processedData = tableData.map(row => {
             const newRow = [...row];
-            // La columna de links estará en la posición 8 (después de nombres y carpeta)
-            if (row[8] && typeof row[8] === 'string' && row[8].includes('https://')) {
-                // Mantener los links como texto para hacer clickeables
-                newRow[8] = row[8];
-            } else {
-                newRow[8] = row[8] || 'Sin links disponibles';
-            }
-            processedData.push(newRow);
+            newRow[8] = (row[8] && row[8].includes('https://')) ? row[8] : 'Sin links';
+            return newRow;
         });
-        
-        // Configurar la tabla con links clickeables
         doc.autoTable({
-            head: [headers],
-            body: processedData,
-            startY: 40,
-            styles: {
-                fontSize: 7,
-                cellPadding: 2,
-                lineColor: [200, 200, 200],
-                lineWidth: 0.1
-            },
-            headStyles: {
-                fillColor: [102, 126, 234],
-                textColor: 255,
-                fontStyle: 'bold'
-            },
-            alternateRowStyles: {
-                fillColor: [248, 249, 250]
-            },
-            columnStyles: {
-                6: { cellWidth: 40 }, // Nombres de evidencias
-                7: { cellWidth: 35 }, // Carpeta
-                8: { 
-                    cellWidth: 65, // Links clickeables
-                    fontSize: 6,
-                    textColor: [0, 0, 255] // Azul para simular links
-                }
-            },
-            didDrawCell: function(data) {
-                // Hacer los links clickeables en la columna de links (índice 8)
+            head:[headers],body:processedData,startY:40,
+            styles:{fontSize:7,cellPadding:2,lineColor:[200,200,200],lineWidth:0.1},
+            headStyles:{fillColor:[102,126,234],textColor:255,fontStyle:'bold'},
+            alternateRowStyles:{fillColor:[248,249,250]},
+            columnStyles:{6:{cellWidth:40},7:{cellWidth:35},8:{cellWidth:65,fontSize:6,textColor:[0,0,255]}},
+            didDrawCell:function(data) {
                 if (data.column.index === 8 && data.section === 'body') {
                     const cellContent = processedData[data.row.index][8];
-                    
                     if (cellContent && cellContent.includes('https://')) {
                         const linksData = parseLinksFromGeneratedText(cellContent);
-                        
                         linksData.forEach((linkData, index) => {
                             if (linkData.url) {
-                                // Calcular la posición Y para cada link
                                 const linkY = data.cell.y + (index * 3) + 3;
-                                
-                                // Crear área clickeable
-                                doc.link(
-                                    data.cell.x + 1,
-                                    linkY - 1,
-                                    data.cell.width - 2,
-                                    3,
-                                    { url: linkData.url }
-                                );
+                                doc.link(data.cell.x + 1, linkY - 1, data.cell.width - 2, 3, {url:linkData.url});
                             }
                         });
                     }
                 }
             }
         });
-        
     } else {
-        // Modo normal sin links
         doc.autoTable({
-            head: [getTableHeaders()],
-            body: tableData,
-            startY: 40,
-            styles: {
-                fontSize: 8,
-                cellPadding: 2
-            },
-            headStyles: {
-                fillColor: [102, 126, 234],
-                textColor: 255,
-                fontStyle: 'bold'
-            },
-            alternateRowStyles: {
-                fillColor: [248, 249, 250]
-            }
+            head:[getTableHeaders()],body:tableData,startY:40,
+            styles:{fontSize:8,cellPadding:2},
+            headStyles:{fillColor:[102,126,234],textColor:255,fontStyle:'bold'},
+            alternateRowStyles:{fillColor:[248,249,250]}
         });
     }
-    
     addPDFFooter(doc);
     pdfBlob = doc.output('blob');
 }
@@ -901,147 +592,77 @@ async function generatePDF(fechaDesde, fechaHasta) {
 function addPDFHeader(doc, fechaDesde, fechaHasta) {
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.text('REPORTE DE ASISTENCIAS - CESPSIC', 148, 15, { align: 'center' });
-    
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Período: ${fechaDesde} al ${fechaHasta}`, 148, 25, { align: 'center' });
-    
+    doc.text('REPORTE DE ASISTENCIAS - CESPSIC', 148, 15, {align:'center'});
     doc.setFontSize(10);
     doc.text(`Generado por: ${currentUser.name} (${currentUser.email})`, 10, 32);
     doc.text(`Fecha: ${new Date().toLocaleString('es-MX')}`, 200, 32);
     doc.text(`Total registros: ${attendanceData.length}`, 10, 37);
+    if (isAdmin) {
+        const ordenamiento = document.getElementById('orden_datos')?.value;
+        if (ordenamiento) doc.text(`Ordenado por: ${ordenamiento}`, 200, 37);
+    }
 }
 
 function addPDFFooter(doc) {
     const pageCount = doc.internal.getNumberOfPages();
-    
     for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
         doc.setFontSize(8);
-        doc.text(
-            `Página ${i} de ${pageCount} - CESPSIC`,
-            148,
-            205,
-            { align: 'center' }
-        );
+        doc.text(`Página ${i} de ${pageCount} - CESPSIC`, 148, 205, {align:'center'});
     }
 }
 
 function getTableHeaders() {
     const incluirCampos = getSelectedFields();
-    const headers = ['Nombre Completo', 'Tipo Estudiante', 'Modalidad', 'Fecha', 'Hora', 'Tipo Registro'];
-    
+    const headers = ['Nombre Completo','Tipo Estudiante','Modalidad','Fecha','Hora','Tipo Registro'];
     if (incluirCampos.includes('evidencias_solo')) {
-        // Solo evidencias: agregar las tres columnas
-        headers.push('Nombres de Evidencias', 'Carpeta en Drive', 'Links a Archivos');
+        headers.push('Nombres de Evidencias','Carpeta en Drive','Links a Archivos');
     } else {
-        // Modo normal: agregar campos según selección
-        if (incluirCampos.includes('intervenciones')) {
-            headers.push('Intervenciones', 'Niños', 'Adolescentes', 'Adultos', 'Mayores 60', 'Familia');
-        }
-        if (incluirCampos.includes('actividades')) {
-            headers.push('Actividades');
-        }
-        if (incluirCampos.includes('evidencias')) {
-            headers.push('Total Evidencias');
-        }
-        if (incluirCampos.includes('comentarios')) {
-            headers.push('Comentarios');
-        }
-        if (incluirCampos.includes('permisos')) {
-            headers.push('Detalle Permiso', 'Detalle Otro');
-        }
+        if (incluirCampos.includes('intervenciones')) headers.push('Intervenciones','Niños','Adolescentes','Adultos','Mayores 60','Familia');
+        if (incluirCampos.includes('actividades')) headers.push('Actividades');
+        if (incluirCampos.includes('evidencias')) headers.push('Total Evidencias');
+        if (incluirCampos.includes('comentarios')) headers.push('Comentarios');
+        if (incluirCampos.includes('permisos')) headers.push('Detalle Permiso','Detalle Otro');
     }
-    
     return headers;
 }
 
 function prepareTableData() {
     const incluirCampos = getSelectedFields();
-    
     return attendanceData.map(record => {
         const nombreCompleto = `${record.nombre} ${record.apellido_paterno} ${record.apellido_materno}`.trim();
-        
-        const row = [
-            nombreCompleto,
-            record.tipo_estudiante || '',
-            record.modalidad || '',
-            record.fecha || '',
-            record.hora || '',
-            record.tipo_registro || ''
-        ];
-        
+        const row = [nombreCompleto,record.tipo_estudiante||'',record.modalidad||'',record.fecha||'',record.hora||'',record.tipo_registro||''];
         if (incluirCampos.includes('evidencias_solo')) {
-            // Solo evidencias: agregar las tres columnas
-            row.push(
-                record.nombres_evidencias || 'Sin evidencias',
-                record.carpeta_evidencias || 'Sin carpeta',
-                record.links_evidencias || 'Sin links disponibles'
-            );
+            row.push(record.nombres_evidencias||'Sin evidencias',record.carpeta_evidencias||'Sin carpeta',record.links_evidencias||'Sin links');
         } else {
-            // Modo normal: agregar campos según selección
             if (incluirCampos.includes('intervenciones')) {
-                row.push(
-                    record.intervenciones_psicologicas || '0',
-                    record.ninos_ninas || '0',
-                    record.adolescentes || '0',
-                    record.adultos || '0',
-                    record.mayores_60 || '0',
-                    record.familia || '0'
-                );
+                row.push(record.intervenciones_psicologicas||'0',record.ninos_ninas||'0',record.adolescentes||'0',record.adultos||'0',record.mayores_60||'0',record.familia||'0');
             }
-            
             if (incluirCampos.includes('actividades')) {
                 let actividades = record.actividades_realizadas || '';
-                if (record.actividades_varias_detalle) {
-                    actividades += (actividades ? ' | ' : '') + record.actividades_varias_detalle;
-                }
-                if (record.pruebas_psicologicas_detalle) {
-                    actividades += (actividades ? ' | ' : '') + record.pruebas_psicologicas_detalle;
-                }
+                if (record.actividades_varias_detalle) actividades += (actividades?' | ':'') + record.actividades_varias_detalle;
+                if (record.pruebas_psicologicas_detalle) actividades += (actividades?' | ':'') + record.pruebas_psicologicas_detalle;
                 row.push(actividades);
             }
-            
-            if (incluirCampos.includes('evidencias')) {
-                row.push(record.total_evidencias || '0');
-            }
-            
-            if (incluirCampos.includes('comentarios')) {
-                row.push(record.comentarios_adicionales || '');
-            }
-            
-            if (incluirCampos.includes('permisos')) {
-                row.push(
-                    record.permiso_detalle || '',
-                    record.otro_detalle || ''
-                );
-            }
+            if (incluirCampos.includes('evidencias')) row.push(record.total_evidencias||'0');
+            if (incluirCampos.includes('comentarios')) row.push(record.comentarios_adicionales||'');
+            if (incluirCampos.includes('permisos')) row.push(record.permiso_detalle||'',record.otro_detalle||'');
         }
-        
         return row;
     });
 }
 
 function parseLinksFromGeneratedText(linksText) {
-    // Parsear el texto generado por el backend que viene en formato:
-    // "archivo1.pdf: https://drive.google.com/file/d/ID1/view\narchivo2.docx: https://drive.google.com/file/d/ID2/view"
-    
     const lines = linksText.split('\n');
     const linksData = [];
-    
     lines.forEach(line => {
         if (line.includes('https://')) {
             const parts = line.split(': https://');
             if (parts.length === 2) {
-                linksData.push({
-                    fileName: parts[0].trim(),
-                    url: 'https://' + parts[1].trim()
-                });
+                linksData.push({fileName:parts[0].trim(),url:'https://' + parts[1].trim()});
             }
         }
     });
-    
     return linksData;
 }
 
@@ -1049,40 +670,15 @@ function getSelectedFields() {
     const checkboxes = document.querySelectorAll('input[name="incluir_campos[]"]:checked');
     return Array.from(checkboxes).map(cb => cb.value);
 }
-async function testEvidenceLinks(fechaDesde, fechaHasta) {
-    try {
-        showStatus('Probando generación de links de evidencias...', 'loading');
-        
-        const result = await makeBackendRequest('get_evidence_links', {
-            fechaDesde: fechaDesde,
-            fechaHasta: fechaHasta,
-            filtroTipoRegistro: 'salida'
-        });
-        
-        if (result.success) {
-            console.log('Links de evidencias generados:', result.data);
-            showStatus(`Se generaron links para ${result.totalRecords} registros con evidencias`, 'success');
-            return result.data;
-        } else {
-            throw new Error(result.message);
-        }
-        
-    } catch (error) {
-        console.error('Error probando links:', error);
-        showStatus('Error generando links: ' + error.message, 'error');
-        return [];
-    }
-}
-// ========== MODAL FUNCTIONS ==========
 
 function showDownloadModal(fechaDesde, fechaHasta) {
     const modal = document.getElementById('modal-overlay');
     const reportInfo = document.getElementById('report-info');
-    
     const incluirCampos = getSelectedFields();
     const filtroTipo = document.getElementById('filtro_tipo').value;
     const filtroModalidad = document.getElementById('filtro_modalidad').value;
-    
+    const filtroUsuario = isAdmin ? document.getElementById('filtro_usuario')?.value : '';
+    const ordenamiento = isAdmin ? document.getElementById('orden_datos')?.value : '';
     reportInfo.innerHTML = `
         <h4>📊 Resumen del Reporte</h4>
         <p><strong>Período:</strong> ${fechaDesde} al ${fechaHasta}</p>
@@ -1090,19 +686,17 @@ function showDownloadModal(fechaDesde, fechaHasta) {
         <p><strong>Campos incluidos:</strong> ${incluirCampos.join(', ')}</p>
         ${filtroTipo ? `<p><strong>Filtro tipo:</strong> ${filtroTipo}</p>` : ''}
         ${filtroModalidad ? `<p><strong>Filtro modalidad:</strong> ${filtroModalidad}</p>` : ''}
+        ${filtroUsuario ? `<p><strong>Filtro usuario:</strong> ${filtroUsuario}</p>` : ''}
+        ${ordenamiento ? `<p><strong>Ordenado por:</strong> ${ordenamiento}</p>` : ''}
         <p><strong>Generado por:</strong> ${currentUser.name}</p>
         <p><strong>Fecha:</strong> ${new Date().toLocaleString('es-MX')}</p>
     `;
-    
-    const downloadBtn = document.getElementById('download-btn');
-    downloadBtn.onclick = downloadPDF;
-    
+    document.getElementById('download-btn').onclick = downloadPDF;
     modal.classList.add('show');
 }
 
 function closeModal() {
-    const modal = document.getElementById('modal-overlay');
-    modal.classList.remove('show');
+    document.getElementById('modal-overlay').classList.remove('show');
 }
 
 function downloadPDF() {
@@ -1115,25 +709,10 @@ function downloadPDF() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        
-        showStatus('Reporte descargado exitosamente.', 'success');
+        showStatus('Reporte descargado', 'success');
         setTimeout(() => {
             hideStatus();
             closeModal();
         }, 2000);
     }
-}
-
-// ========== UTILITY FUNCTIONS ==========
-
-function showStatus(message, type) {
-    const status = document.getElementById('status');
-    status.innerHTML = message;
-    status.className = `status ${type}`;
-    status.style.display = 'block';
-}
-
-function hideStatus() {
-    const status = document.getElementById('status');
-    status.style.display = 'none';
 }
