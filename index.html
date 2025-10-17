@@ -24,17 +24,17 @@
                 <img src="https://lh3.googleusercontent.com/d/12tYxfzWgy3BVYjadXOEKlX5-uSsxIrBt" alt="CESPSIC" class="logo">
                 <img src="https://lh3.googleusercontent.com/d/1tR9QzPGbydb_qjDkZOKsoNU6_xIBGQP2" alt="Facultad de Psicología" class="logo">
             </div>
-            <h1>Generador de Reportes de Asistencia - Centro de Servicios Psicológicos (CESPSIC) v.4.2</h1>
+            <h1>Generador de Reportes de Asistencia - Centro de Servicios Psicológicos (CESPSIC) v.4.5</h1>
         </div>
 
         <!-- Sección de Autenticación -->
         <div class="auth-section" id="auth-section">
             <div class="auth-title" id="auth-title">
-                🔒 Autenticación Administrativa Requerida
+                🔒 Autenticación Requerida
             </div>
             
             <div class="auth-warning">
-                ⚠️ Solo administradores autorizados pueden generar reportes de asistencia
+                ⚠️ Todos los usuarios autorizados pueden generar reportes de sus propias asistencias
             </div>
             
             <!-- Información del usuario autenticado -->
@@ -52,8 +52,8 @@
             </div>
             
             <div class="auth-info" style="margin-top: 15px; padding: 10px; background: #e3f2fd; border-radius: 8px; font-size: 14px; color: #1565c0;">
-                🔐 <strong>Nota:</strong> Solo usuarios autorizados pueden acceder a esta funcionalidad.
-                <br>🏢 <strong>Acceso:</strong> Restringido a administradores de CESPSIC.
+                📝 <strong>Nota:</strong> Los usuarios regulares solo pueden ver sus propios registros.
+                <br>👑 <strong>Administradores:</strong> Tienen acceso completo a todos los datos.
             </div>
         </div>
 
@@ -63,7 +63,7 @@
                 <div class="form-section">
                     <h2>📋 Generar Reporte de Asistencias</h2>
                     <p class="form-description">
-                        Seleccione el rango de fechas para generar el reporte PDF con todas las asistencias registradas.
+                        Seleccione el rango de fechas para generar el reporte PDF con sus asistencias registradas.
                     </p>
                 </div>
 
@@ -80,7 +80,7 @@
                     </div>
                 </div>
 
-                <!-- NUEVA SECCIÓN: Controles de Administrador -->
+                <!-- SECCIÓN: Controles de Administrador -->
                 <div class="form-section admin-section" id="admin-controls-section" style="display: none;">
                     <h3 style="color: #764ba2; font-size: 1.1em; margin-bottom: 15px;">
                         👑 Controles de Administrador
@@ -104,21 +104,21 @@
                             <label for="orden_datos">
                                 Ordenar datos por:
                                 <span style="font-size: 0.85em; color: #666; font-weight: normal;">
-                                    Define el orden de los registros en el PDF
+                                    Define el orden de las columnas
                                 </span>
                             </label>
                             <select id="orden_datos" name="orden_datos">
-                                <option value="nombre">Nombre (nombre, fecha, tipo, modalidad, registro)</option>
-                                <option value="fecha">Fecha (fecha, tipo, modalidad, nombre, registro)</option>
-                                <option value="tipo_estudiante">Tipo de Estudiante (tipo, fecha, modalidad, nombre, registro)</option>
-                                <option value="modalidad">Modalidad (modalidad, tipo, fecha, nombre, registro)</option>
-                                <option value="tipo_registro">Tipo de Registro (registro, fecha, tipo, modalidad, nombre)</option>
+                                <option value="nombre">Nombre (Nombre, Tipo, Modal., Fecha, Hora, Reg.)</option>
+                                <option value="fecha">Fecha (Fecha, Hora, Tipo, Modal., Nombre, Reg.)</option>
+                                <option value="tipo_estudiante">Tipo Estudiante (Tipo, Fecha, Hora, Modal., Nombre, Reg.)</option>
+                                <option value="modalidad">Modalidad (Modal., Tipo, Fecha, Hora, Nombre, Reg.)</option>
+                                <option value="tipo_registro">Tipo Registro (Reg., Fecha, Hora, Tipo, Modal., Nombre)</option>
                             </select>
                         </div>
                     </div>
                     
                     <div class="admin-info" style="background: #f3e5f5; border-left: 4px solid #764ba2; padding: 12px; border-radius: 6px; margin-top: 10px;">
-                        <strong>ℹ️ Información:</strong> Estos controles solo están disponibles para administradores y permiten filtrar y ordenar los datos de manera avanzada.
+                        <strong>ℹ️ Información:</strong> Como administrador, puedes ver y filtrar todos los registros del sistema.
                     </div>
                 </div>
 
@@ -128,7 +128,7 @@
                         <div class="checkbox-group">
                             <div class="checkbox-item">
                                 <input type="checkbox" id="incluir_basicos" name="incluir_campos[]" value="basicos" checked disabled>
-                                <label for="incluir_basicos">Información básica (Nombre, Tipo estudiante, Modalidad, Fecha, Hora, Tipo registro)</label>
+                                <label for="incluir_basicos">Información básica (según orden seleccionado)</label>
                             </div>
                             
                             <!-- Checkbox especial para Evidencias - SOLO ADMINISTRADORES -->
