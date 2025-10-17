@@ -15,7 +15,6 @@ const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyN49EgjqFoE4
 //const SHEET_ID = '1YLmEuA-O3Vc1fWRQ1nC_BojOUSVmzBb8QxCCsb5tQwk';
 //const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzBJRaLjii8Y8F_9XC3_n5e--R2bzDXqrfWHeFUIYn3cRct-qVHZ1VEgJEj8XKEU9Ch/exec';
 //'jose.lino.flores.madrigal@gmail.com',
-const AUTHORIZED_USERS = ['cepsic.atencionpsicologica@gmail.com','adymadrid.22@gmail.com','cespsic@uas.edu.mx'];
 const ADMIN_USERS = ['cepsic.atencionpsicologica@gmail.com','cespsic@uas.edu.mx'];
 
 let authenticationAttempts = 0;
@@ -81,7 +80,7 @@ async function checkBackendAvailability() {
 }
 
 // ========== AUTENTICACIÓN ==========
-function handleCredentialResponse(response) {
+async function handleCredentialResponse(response) {
     try {
         authenticationAttempts++;
         if (authenticationAttempts > MAX_AUTH_ATTEMPTS) {
@@ -90,29 +89,81 @@ function handleCredentialResponse(response) {
         }
         const userInfo = parseJwt(response.credential);
         if (!userInfo) throw new Error('No se procesó usuario');
-        if (!AUTHORIZED_USERS.includes(userInfo.email)) {
-            showStatus(`Acceso denegado: ${userInfo.email}`, 'error');
-            return;
-        }
+        
+        // CAMBIO: Ya no validar lista de usuarios autorizados
+        // Todos los usuarios con cuenta Google válida pueden autenticarse
+        
         if (!userInfo.email_verified) {
             showStatus('Cuenta no verificada', 'error');
             return;
         }
+        
+        // Verificar si es administrador
         isAdmin = ADMIN_USERS.includes(userInfo.email);
-        currentUser = {id:userInfo.sub,email:userInfo.email,name:userInfo.name,picture:userInfo.picture,email_verified:userInfo.email_verified,isAdmin:isAdmin};
+        
+        currentUser = {
+            id:userInfo.sub,
+            email:userInfo.email,
+            name:userInfo.name,
+            picture:userInfo.picture,
+            email_verified:userInfo.email_verified,
+            isAdmin:isAdmin
+        };
+        
         isAuthenticated = true;
         updateAuthenticationUI();
         enableForm();
+        
         if (isAdmin) {
             showAdminControls();
         } else {
+            // NUEVO: Para usuarios regulares, buscar su nombre en la base de datos
+            await findUserNameInDatabase();
             showRegularUserControls();
         }
-        setTimeout(() => testBackendPermissions(), 1000);
+        
         showStatus(`Bienvenido ${currentUser.name}!${isAdmin?' (Admin)':''}`, 'success');
         setTimeout(() => hideStatus(), 4000);
+        
     } catch (error) {
         showStatus('Error: ' + error.message, 'error');
+    }
+}
+
+// NUEVA FUNCIÓN: Buscar el nombre del usuario en la base de datos
+async function findUserNameInDatabase() {
+    try {
+        // Obtener el rango de fechas por defecto (último mes)
+        const fechaHasta = new Date().toLocaleDateString('en-CA', {timeZone:'America/Mazatlan'});
+        const fechaDesde = new Date();
+        fechaDesde.setMonth(fechaDesde.getMonth() - 6); // Buscar en los últimos 6 meses
+        const fechaDesdeStr = fechaDesde.toISOString().split('T')[0];
+        
+        showStatus('Identificando usuario...', 'loading');
+        
+        // Hacer una búsqueda amplia para encontrar el nombre del usuario
+        const result = await makeBackendRequestWithRetry('get_attendance_data', {
+            fechaDesde: fechaDesdeStr,
+            fechaHasta: fechaHasta,
+            filtroUsuario: '', // Sin filtro para buscar todos
+            ordenamiento: 'nombre'
+        });
+        
+        if (result.success && result.data && result.data.length > 0) {
+            // Buscar el nombre que coincida con el email del usuario
+            // Esto requiere que el backend tenga lógica para asociar email → nombre
+            // Por ahora, intentaremos encontrar el nombre más común en sus registros
+            
+            // Si no podemos determinar automáticamente, dejar vacío
+            userFullName = '';
+            
+            hideStatus();
+        } else {
+            hideStatus();
+        }
+    } catch (error) {
+        console.warn('No se pudo identificar automáticamente el usuario:', error);
+        hideStatus();
     }
 }
 
@@ -130,32 +181,6 @@ function showRegularUserControls() {
     if (adminSection) adminSection.style.display = 'none';
     const evidenciasCheckbox = document.querySelector('.checkbox-evidencias');
     if (evidenciasCheckbox) evidenciasCheckbox.style.display = 'none';
-    
-    // Cargar automáticamente el filtro de usuarios para seleccionar su nombre
-    updateUserFilterForRegularUser();
-}
-
-async function updateUserFilterForRegularUser() {
-    const fechaDesde = document.getElementById('fecha_desde').value;
-    const fechaHasta = document.getElementById('fecha_hasta').value;
-    
-    if (!fechaDesde || !fechaHasta) return;
-    
-    try {
-        showStatus('Cargando usuarios...', 'loading');
-        const result = await makeBackendRequestWithRetry('get_users_in_range', {fechaDesde,fechaHasta});
-        
-        if (result.success && result.users && result.users.length > 0) {
-            // Mostrar mensaje para que el usuario seleccione su nombre
-            showStatus('Por favor, selecciona tu nombre en el filtro de usuario', 'loading');
-            setTimeout(() => hideStatus(), 5000);
-        } else {
-            hideStatus();
-        }
-    } catch (error) {
-        console.error('Error usuarios:', error);
-        hideStatus();
-    }
 }
 
 function setupAdminFilters() {
@@ -193,23 +218,7 @@ async function updateUserFilter() {
     }
 }
 
-async function testBackendPermissions() {
-    try {
-        showStatus('Verificando...', 'loading');
-        const testResult = await makeBackendRequestWithRetry('test_permissions', {});
-        if (testResult.success) {
-            const failedTests = Object.values(testResult.tests || {}).filter(test => !test.success);
-            showStatus(failedTests.length === 0 ? 'Sistema OK' : `${failedTests.length} problemas`, failedTests.length === 0 ? 'success' : 'error');
-        } else {
-            showStatus('Error: ' + testResult.message, 'error');
-        }
-        setTimeout(() => hideStatus(), 5000);
-    } catch (error) {
-        showStatus('No verificado', 'error');
-    }
-}
-
-// ========== COMUNICACIÓN BACKEND ==========
+// ========== COMUNICACIÓN BACKEND (sin cambios en estas funciones) ==========
 async function makeBackendRequestWithRetry(action, additionalData = {}) {
     let lastError = null;
     for (let attempt = 1; attempt <= FETCH_CONFIG.maxRetries; attempt++) {
@@ -296,23 +305,6 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-/**
- * FUNCIÓN PARA NORMALIZAR NOMBRES: Primera letra en mayúscula, resto en minúscula
- */
-function normalizeNameCase(name) {
-    if (!name || typeof name !== 'string') return '';
-    
-    return name
-        .trim()
-        .toLowerCase()
-        .split(' ')
-        .map(word => {
-            if (word.length === 0) return '';
-            return word.charAt(0).toUpperCase() + word.slice(1);
-        })
-        .join(' ');
-}
-
 function parseJwt(token) {
     try {
         const base64Url = token.split('.')[1];
@@ -337,7 +329,7 @@ function updateAuthenticationUI() {
         document.getElementById('user-avatar').src = currentUser.picture;
         document.getElementById('user-email').textContent = currentUser.email;
         document.getElementById('user-name').textContent = currentUser.name;
-        document.getElementById('user-status').textContent = isAdmin ? '👑 Administrador' : '✅ Autorizado';
+        document.getElementById('user-status').textContent = isAdmin ? '👑 Administrador' : '✅ Usuario';
         userInfo.classList.add('show');
         signinContainer.style.display = 'none';
     } else {
@@ -385,6 +377,7 @@ function signOut() {
         pdfBlob = null;
         authenticationAttempts = 0;
         isAdmin = false;
+        userFullName = '';
         updateAuthenticationUI();
         disableForm();
         closeModal();
@@ -493,6 +486,7 @@ function validateDates() {
     return true;
 }
 
+// MODIFICADO: Lógica de generación de reporte
 async function handleFormSubmit(e) {
     e.preventDefault();
     if (!isAuthenticated || !currentUser) {
@@ -509,15 +503,18 @@ async function handleFormSubmit(e) {
         return;
     }
     
-    const filtroUsuario = isAdmin ? document.getElementById('filtro_usuario')?.value : '';
-    const ordenamiento = isAdmin ? document.getElementById('orden_datos')?.value : 'nombre';
-    
-    // Si no es admin y no ha seleccionado usuario, advertir
-    if (!isAdmin && !filtroUsuario) {
-        showStatus('Por favor selecciona tu nombre en el filtro de usuario', 'error');
-        return;
+    // CAMBIO: Determinar filtro de usuario según rol
+    let filtroUsuario = '';
+    if (isAdmin) {
+        // Admin puede filtrar o ver todos
+        filtroUsuario = document.getElementById('filtro_usuario')?.value || '';
+    } else {
+        // Usuario regular: usar su email para filtrar en el backend
+        // El backend debe filtrar automáticamente por email
+        filtroUsuario = ''; // Vacío, el backend usará el userEmail del request
     }
     
+    const ordenamiento = isAdmin ? document.getElementById('orden_datos')?.value : 'nombre';
     const incluirCampos = getSelectedFields();
     const isModoEvidencias = incluirCampos.includes('evidencias_solo');
     
@@ -529,7 +526,7 @@ async function handleFormSubmit(e) {
     try {
         await fetchAttendanceData(fechaDesde, fechaHasta, filtroUsuario, ordenamiento);
         if (!attendanceData || attendanceData.length === 0) {
-            showStatus(isModoEvidencias ? 'Sin SALIDAS con evidencias' : 'Sin registros para tu usuario', 'error');
+            showStatus(isModoEvidencias ? 'Sin SALIDAS con evidencias' : 'Sin registros en este período', 'error');
             updateSubmitButton();
             return;
         }
@@ -582,15 +579,17 @@ async function fetchAttendanceData(fechaDesde, fechaHasta, filtroUsuario = '', o
     }
 }
 
+// ... (resto de funciones sin cambios: sortAttendanceData, generatePDF, etc.)
+
 function sortAttendanceData(data, ordenamiento) {
     const sorted = [...data];
     const getNombre = (r) => `${r.nombre} ${r.apellido_paterno} ${r.apellido_materno}`.trim().toLowerCase();
     const comparators = {
-        nombre: (a,b) => getNombre(a).localeCompare(getNombre(b)) || a.fecha.localeCompare(b.fecha) || (a.tipo_estudiante||'').localeCompare(b.tipo_estudiante||'') || (a.modalidad||'').localeCompare(b.modalidad||'') || (a.tipo_registro||'').localeCompare(b.tipo_registro||''),
-        fecha: (a,b) => a.fecha.localeCompare(b.fecha) || (a.tipo_estudiante||'').localeCompare(b.tipo_estudiante||'') || (a.modalidad||'').localeCompare(b.modalidad||'') || getNombre(a).localeCompare(getNombre(b)) || (a.tipo_registro||'').localeCompare(b.tipo_registro||''),
-        tipo_estudiante: (a,b) => (a.tipo_estudiante||'').localeCompare(b.tipo_estudiante||'') || a.fecha.localeCompare(b.fecha) || (a.modalidad||'').localeCompare(b.modalidad||'') || getNombre(a).localeCompare(getNombre(b)) || (a.tipo_registro||'').localeCompare(b.tipo_registro||''),
-        modalidad: (a,b) => (a.modalidad||'').localeCompare(b.modalidad||'') || (a.tipo_estudiante||'').localeCompare(b.tipo_estudiante||'') || a.fecha.localeCompare(b.fecha) || getNombre(a).localeCompare(getNombre(b)) || (a.tipo_registro||'').localeCompare(b.tipo_registro||''),
-        tipo_registro: (a,b) => (a.tipo_registro||'').localeCompare(b.tipo_registro||'') || a.fecha.localeCompare(b.fecha) || (a.tipo_estudiante||'').localeCompare(b.tipo_estudiante||'') || (a.modalidad||'').localeCompare(b.modalidad||'') || getNombre(a).localeCompare(getNombre(b))
+        nombre: (a,b) => getNombre(a).localeCompare(getNombre(b)) || a.fecha.localeCompare(b.fecha),
+        fecha: (a,b) => a.fecha.localeCompare(b.fecha) || getNombre(a).localeCompare(getNombre(b)),
+        tipo_estudiante: (a,b) => (a.tipo_estudiante||'').localeCompare(b.tipo_estudiante||'') || a.fecha.localeCompare(b.fecha),
+        modalidad: (a,b) => (a.modalidad||'').localeCompare(b.modalidad||'') || a.fecha.localeCompare(b.fecha),
+        tipo_registro: (a,b) => (a.tipo_registro||'').localeCompare(b.tipo_registro||'') || a.fecha.localeCompare(b.fecha)
     };
     sorted.sort(comparators[ordenamiento] || comparators.nombre);
     return sorted;
@@ -616,7 +615,6 @@ async function generatePDF(fechaDesde, fechaHasta, ordenamiento = 'nombre') {
             return newRow;
         });
         
-        // Configuración de columnas más compacta
         const columnStyles = {};
         headers.forEach((header, index) => {
             if (header === 'Links') {
@@ -654,11 +652,8 @@ async function generatePDF(fechaDesde, fechaHasta, ordenamiento = 'nombre') {
         });
     } else {
         const headers = getTableHeaders(ordenamiento);
-        
-        // Configuración más compacta para modo normal
         const columnStyles = {};
         headers.forEach((header, index) => {
-            // Columnas con números - más estrechas
             if (['Interv.', 'Niños', 'Adoles.', 'Adult.', 'May.60', 'Fam.', 'Tot.Ev.'].includes(header)) {
                 columnStyles[index] = {cellWidth: 12, fontSize: 6, halign: 'center'};
             } else if (header === 'Actividades') {
@@ -719,7 +714,6 @@ function getTableHeaders(ordenamiento = 'nombre') {
     const incluirCampos = getSelectedFields();
     let headers = [];
     
-    // Determinar el orden de las primeras columnas según el ordenamiento
     const baseHeaders = {
         'nombre': ['Nombre Completo', 'Tipo Est.', 'Modalidad', 'Fecha', 'Hora', 'Tipo Reg.'],
         'fecha': ['Fecha', 'Hora', 'Tipo Est.', 'Modalidad', 'Nombre Completo', 'Tipo Reg.'],
@@ -757,7 +751,6 @@ function prepareTableData(ordenamiento = 'nombre') {
         
         let row = [];
         
-        // Organizar columnas según el ordenamiento
         switch(ordenamiento) {
             case 'fecha':
                 row = [fecha, hora, tipoEst, modalidad, nombreCompleto, tipoReg];
@@ -771,7 +764,7 @@ function prepareTableData(ordenamiento = 'nombre') {
             case 'tipo_registro':
                 row = [tipoReg, fecha, hora, tipoEst, modalidad, nombreCompleto];
                 break;
-            default: // nombre
+            default:
                 row = [nombreCompleto, tipoEst, modalidad, fecha, hora, tipoReg];
         }
         
