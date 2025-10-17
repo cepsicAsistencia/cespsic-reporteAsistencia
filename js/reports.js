@@ -125,104 +125,36 @@ function showAdminControls() {
 }
 
 function showRegularUserControls() {
-    // Ocultar controles de admin completamente
+    // Ocultar controles de admin
     const adminSection = document.getElementById('admin-controls-section');
     if (adminSection) adminSection.style.display = 'none';
     const evidenciasCheckbox = document.querySelector('.checkbox-evidencias');
     if (evidenciasCheckbox) evidenciasCheckbox.style.display = 'none';
     
-    // Mostrar sección de selección de usuario para usuarios regulares
-    showRegularUserSection();
-}
-
-function showRegularUserSection() {
-    // Crear sección para que usuarios regulares seleccionen su nombre
-    const formContainer = document.getElementById('form-container');
-    const firstFormSection = formContainer.querySelector('.form-section');
-    
-    // Verificar si ya existe la sección
-    if (document.getElementById('regular-user-section')) return;
-    
-    const userSection = document.createElement('div');
-    userSection.id = 'regular-user-section';
-    userSection.className = 'form-section';
-    userSection.style.background = 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)';
-    userSection.style.border = '2px solid #2196f3';
-    userSection.style.borderRadius = '12px';
-    userSection.style.padding = '20px';
-    userSection.style.marginBottom = '20px';
-    
-    userSection.innerHTML = `
-        <h3 style="color: #1976d2; font-size: 1.1em; margin-bottom: 15px;">
-            👤 Selecciona tu Nombre
-        </h3>
-        <div class="form-group">
-            <label for="filtro_usuario_regular">
-                Tu nombre completo <span class="required">*</span>
-                <span style="font-size: 0.85em; color: #666; font-weight: normal; display: block; margin-top: 5px;">
-                    Selecciona las fechas primero para cargar la lista de usuarios
-                </span>
-            </label>
-            <select id="filtro_usuario_regular" name="filtro_usuario_regular" required>
-                <option value="">Selecciona tu nombre...</option>
-            </select>
-        </div>
-        <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 12px; border-radius: 6px; margin-top: 10px;">
-            <strong>ℹ️ Importante:</strong> Solo podrás ver tus propios registros ordenados por fecha.
-        </div>
-    `;
-    
-    // Insertar después de la primera sección (que contiene las fechas)
-    firstFormSection.parentNode.insertBefore(userSection, firstFormSection.nextSibling);
-    
-    // Configurar listeners para actualizar la lista cuando cambien las fechas
-    setupRegularUserFilters();
-}
-
-function setupRegularUserFilters() {
-    const fechaDesde = document.getElementById('fecha_desde');
-    const fechaHasta = document.getElementById('fecha_hasta');
-    
-    if (fechaDesde && fechaHasta) {
-        fechaDesde.addEventListener('change', updateUserFilterForRegularUser);
-        fechaHasta.addEventListener('change', updateUserFilterForRegularUser);
-    }
-    
-    // Cargar usuarios inmediatamente si las fechas ya están seleccionadas
-    if (fechaDesde.value && fechaHasta.value) {
-        updateUserFilterForRegularUser();
-    }
+    // Cargar automáticamente el filtro de usuarios para seleccionar su nombre
+    updateUserFilterForRegularUser();
 }
 
 async function updateUserFilterForRegularUser() {
     const fechaDesde = document.getElementById('fecha_desde').value;
     const fechaHasta = document.getElementById('fecha_hasta').value;
-    const userSelect = document.getElementById('filtro_usuario_regular');
     
-    if (!fechaDesde || !fechaHasta || !userSelect) return;
+    if (!fechaDesde || !fechaHasta) return;
     
     try {
         showStatus('Cargando usuarios...', 'loading');
-        const result = await makeBackendRequestWithRetry('get_users_in_range', {fechaDesde, fechaHasta});
+        const result = await makeBackendRequestWithRetry('get_users_in_range', {fechaDesde,fechaHasta});
         
-        if (result.success && result.users) {
-            userSelect.innerHTML = '<option value="">Selecciona tu nombre...</option>';
-            result.users.forEach(user => {
-                const option = document.createElement('option');
-                option.value = user;
-                option.textContent = user;
-                userSelect.appendChild(option);
-            });
-            showStatus(`${result.users.length} usuarios encontrados. Selecciona tu nombre.`, 'success');
-            setTimeout(() => hideStatus(), 3000);
+        if (result.success && result.users && result.users.length > 0) {
+            // Mostrar mensaje para que el usuario seleccione su nombre
+            showStatus('Por favor, selecciona tu nombre en el filtro de usuario', 'loading');
+            setTimeout(() => hideStatus(), 5000);
         } else {
-            showStatus('No se encontraron usuarios en ese rango de fechas', 'error');
-            setTimeout(() => hideStatus(), 3000);
+            hideStatus();
         }
     } catch (error) {
-        console.error('Error cargando usuarios:', error);
-        showStatus('Error cargando lista de usuarios', 'error');
-        setTimeout(() => hideStatus(), 3000);
+        console.error('Error usuarios:', error);
+        hideStatus();
     }
 }
 
@@ -461,15 +393,10 @@ function signOut() {
         updateAuthenticationUI();
         disableForm();
         closeModal();
-        
-        // Limpiar secciones específicas
         const adminSection = document.getElementById('admin-controls-section');
         if (adminSection) adminSection.style.display = 'none';
-        const regularSection = document.getElementById('regular-user-section');
-        if (regularSection) regularSection.remove();
         const evidenciasCheckbox = document.querySelector('.checkbox-evidencias');
         if (evidenciasCheckbox) evidenciasCheckbox.style.display = 'none';
-        
         showStatus('Sesión cerrada', 'success');
         setTimeout(() => {
             hideStatus();
@@ -587,24 +514,13 @@ async function handleFormSubmit(e) {
         return;
     }
     
-    // Determinar filtro de usuario según el tipo de usuario
-    let filtroUsuario = '';
-    let ordenamiento = 'fecha'; // Por defecto ordenar por fecha para usuarios regulares
+    const filtroUsuario = isAdmin ? document.getElementById('filtro_usuario')?.value : '';
+    const ordenamiento = isAdmin ? document.getElementById('orden_datos')?.value : 'nombre';
     
-    if (isAdmin) {
-        // Admin: usar sus controles
-        filtroUsuario = document.getElementById('filtro_usuario')?.value || '';
-        ordenamiento = document.getElementById('orden_datos')?.value || 'nombre';
-    } else {
-        // Usuario regular: usar su selector específico
-        filtroUsuario = document.getElementById('filtro_usuario_regular')?.value || '';
-        ordenamiento = 'fecha'; // Siempre ordenado por fecha
-        
-        // Validar que haya seleccionado su nombre
-        if (!filtroUsuario || filtroUsuario === '') {
-            showStatus('Por favor selecciona tu nombre en la lista', 'error');
-            return;
-        }
+    // Si no es admin y no ha seleccionado usuario, advertir
+    if (!isAdmin && !filtroUsuario) {
+        showStatus('Por favor selecciona tu nombre en el filtro de usuario', 'error');
+        return;
     }
     
     const incluirCampos = getSelectedFields();
@@ -618,14 +534,11 @@ async function handleFormSubmit(e) {
     try {
         await fetchAttendanceData(fechaDesde, fechaHasta, filtroUsuario, ordenamiento);
         if (!attendanceData || attendanceData.length === 0) {
-            const mensajeError = isAdmin 
-                ? (isModoEvidencias ? 'Sin SALIDAS con evidencias en el rango seleccionado' : 'Sin registros en el rango seleccionado') 
-                : 'No se encontraron registros para tu usuario en el rango de fechas seleccionado.\n\n• Verifica que el nombre seleccionado sea correcto\n• Intenta con un rango de fechas diferente';
-            showStatus(mensajeError, 'error');
+            showStatus(isModoEvidencias ? 'Sin SALIDAS con evidencias' : 'Sin registros para tu usuario', 'error');
             updateSubmitButton();
             return;
         }
-        showStatus(`Generando PDF (${attendanceData.length} registros)...`, 'loading');
+        showStatus(`Generando PDF (${attendanceData.length})...`, 'loading');
         submitBtn.textContent = 'Generando PDF...';
         await generatePDF(fechaDesde, fechaHasta, ordenamiento);
         showDownloadModal(fechaDesde, fechaHasta);
@@ -933,17 +846,8 @@ function showDownloadModal(fechaDesde, fechaHasta) {
     const incluirCampos = getSelectedFields();
     const filtroTipo = document.getElementById('filtro_tipo').value;
     const filtroModalidad = document.getElementById('filtro_modalidad').value;
-    
-    let filtroUsuario = '';
-    let ordenamiento = 'fecha';
-    
-    if (isAdmin) {
-        filtroUsuario = document.getElementById('filtro_usuario')?.value || '';
-        ordenamiento = document.getElementById('orden_datos')?.value || 'nombre';
-    } else {
-        filtroUsuario = document.getElementById('filtro_usuario_regular')?.value || '';
-        ordenamiento = 'fecha';
-    }
+    const filtroUsuario = isAdmin ? document.getElementById('filtro_usuario')?.value : '';
+    const ordenamiento = isAdmin ? document.getElementById('orden_datos')?.value : 'nombre';
     
     const ordenTexto = {
         'nombre': 'Nombre',
@@ -953,33 +857,18 @@ function showDownloadModal(fechaDesde, fechaHasta) {
         'tipo_registro': 'Tipo Registro'
     };
     
-    let htmlContent = `
+    reportInfo.innerHTML = `
         <h4>📊 Resumen del Reporte</h4>
         <p><strong>Período:</strong> ${fechaDesde} al ${fechaHasta}</p>
         <p><strong>Total de registros:</strong> ${attendanceData.length}</p>
         <p><strong>Campos incluidos:</strong> ${incluirCampos.join(', ')}</p>
         ${filtroTipo ? `<p><strong>Filtro tipo:</strong> ${filtroTipo}</p>` : ''}
         ${filtroModalidad ? `<p><strong>Filtro modalidad:</strong> ${filtroModalidad}</p>` : ''}
-    `;
-    
-    if (isAdmin) {
-        htmlContent += `
-            ${filtroUsuario ? `<p><strong>Filtro usuario:</strong> ${filtroUsuario}</p>` : '<p><strong>Usuarios:</strong> Todos</p>'}
-            <p><strong>Ordenado por:</strong> ${ordenTexto[ordenamiento] || ordenamiento}</p>
-        `;
-    } else {
-        htmlContent += `
-            <p><strong>Usuario:</strong> ${filtroUsuario}</p>
-            <p><strong>Ordenado por:</strong> Fecha</p>
-        `;
-    }
-    
-    htmlContent += `
+        ${filtroUsuario ? `<p><strong>Filtro usuario:</strong> ${filtroUsuario}</p>` : ''}
+        ${ordenamiento ? `<p><strong>Ordenado por:</strong> ${ordenTexto[ordenamiento] || ordenamiento}</p>` : ''}
         <p><strong>Generado por:</strong> ${currentUser.name}</p>
         <p><strong>Fecha:</strong> ${new Date().toLocaleString('es-MX')}</p>
     `;
-    
-    reportInfo.innerHTML = htmlContent;
     document.getElementById('download-btn').onclick = downloadPDF;
     modal.classList.add('show');
 }
