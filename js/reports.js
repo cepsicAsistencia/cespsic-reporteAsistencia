@@ -168,19 +168,42 @@ async function findUserNameInDatabase() {
 }
 
 function showAdminControls() {
+    console.log('🔧 Configurando controles de administrador...');
+    
     const adminSection = document.getElementById('admin-controls-section');
-    if (adminSection) adminSection.style.display = 'block';
+    if (adminSection) {
+        adminSection.style.display = 'block';
+        console.log('✅ Sección de admin visible');
+    } else {
+        console.error('❌ No se encontró admin-controls-section');
+    }
+    
     const evidenciasCheckbox = document.querySelector('.checkbox-evidencias');
-    if (evidenciasCheckbox) evidenciasCheckbox.style.display = 'flex';
+    if (evidenciasCheckbox) {
+        evidenciasCheckbox.style.display = 'flex';
+        console.log('✅ Checkbox de evidencias visible');
+    } else {
+        console.error('❌ No se encontró checkbox-evidencias');
+    }
+    
     setupAdminFilters();
 }
 
 function showRegularUserControls() {
+    console.log('👤 Configurando controles de usuario regular...');
+    
     // Ocultar controles de admin
     const adminSection = document.getElementById('admin-controls-section');
-    if (adminSection) adminSection.style.display = 'none';
+    if (adminSection) {
+        adminSection.style.display = 'none';
+        console.log('✅ Sección de admin oculta');
+    }
+    
     const evidenciasCheckbox = document.querySelector('.checkbox-evidencias');
-    if (evidenciasCheckbox) evidenciasCheckbox.style.display = 'none';
+    if (evidenciasCheckbox) {
+        evidenciasCheckbox.style.display = 'none';
+        console.log('✅ Checkbox de evidencias oculto');
+    }
 }
 
 function setupAdminFilters() {
@@ -377,7 +400,6 @@ function signOut() {
         pdfBlob = null;
         authenticationAttempts = 0;
         isAdmin = false;
-        userFullName = '';
         updateAuthenticationUI();
         disableForm();
         closeModal();
@@ -508,10 +530,11 @@ async function handleFormSubmit(e) {
     if (isAdmin) {
         // Admin puede filtrar o ver todos
         filtroUsuario = document.getElementById('filtro_usuario')?.value || '';
+        console.log('Admin - Filtro usuario:', filtroUsuario || 'Todos');
     } else {
-        // Usuario regular: usar su email para filtrar en el backend
-        // El backend debe filtrar automáticamente por email
-        filtroUsuario = ''; // Vacío, el backend usará el userEmail del request
+        // Usuario regular: el backend filtrará automáticamente por su email
+        filtroUsuario = '';
+        console.log('Usuario regular - Backend filtrará por email automáticamente');
     }
     
     const ordenamiento = isAdmin ? document.getElementById('orden_datos')?.value : 'nombre';
