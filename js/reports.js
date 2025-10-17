@@ -229,6 +229,9 @@ function showRegularUserControls() {
         evidenciasCheckbox.style.display = 'none';
         console.log('✅ Checkbox de evidencias oculto');
     }
+    
+    // NUEVO: Establecer rango de fechas a día de hoy
+    setMaxDate();
 }
 
 function setupAdminFilters() {
@@ -459,10 +462,90 @@ function setMaxDate() {
     const today = new Date().toLocaleDateString('en-CA', {timeZone:'America/Mazatlan'});
     document.getElementById('fecha_hasta').max = today;
     document.getElementById('fecha_hasta').value = today;
-    const todayDate = new Date(today);
-    const oneMonthAgo = new Date(todayDate);
-    oneMonthAgo.setMonth(todayDate.getMonth() - 1);
-    document.getElementById('fecha_desde').value = oneMonthAgo.toISOString().split('T')[0];
+    
+    // CAMBIO: Para usuarios regulares, el rango por defecto es solo el día de hoy
+    // Para administradores, mantener el mes anterior
+    if (!isAdmin) {
+        document.getElementById('fecha_desde').value = today;
+    } else {
+        const todayDate = new Date(today);
+        const oneMonthAgo = new Date(todayDate);
+        oneMonthAgo.setMonth(todayDate.getMonth() - 1);
+        document.getElementById('fecha_desde').value = oneMonthAgo.toISOString().split('T')[0];
+    }
+}
+
+// Nueva función para mostrar asistencias en pantalla (solo usuarios regulares)
+function displayAttendanceOnScreen() {
+    if (isAdmin) return; // Los administradores no necesitan esta vista
+    
+    const attendanceSection = document.getElementById('attendance-view-section');
+    const attendanceSummary = document.getElementById('attendance-summary');
+    const attendanceList = document.getElementById('attendance-list');
+    
+    if (!attendanceData || attendanceData.length === 0) {
+        attendanceSection.style.display = 'block';
+        attendanceSummary.innerHTML = '📊 Sin asistencias en este período';
+        attendanceList.innerHTML = `
+            <div class="no-attendance-message">
+                <div class="icon">📭</div>
+                <p>No hay registros de asistencia para el período seleccionado.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    attendanceSection.style.display = 'block';
+    attendanceSummary.innerHTML = `📊 Total de asistencias: <strong>${attendanceData.length}</strong>`;
+    
+    // Crear tabla
+    let tableHTML = `
+        <table class="attendance-table">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Hora</th>
+                    <th>Tipo de Registro</th>
+                    <th>Nombre</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    attendanceData.forEach(record => {
+        const nombreCompleto = normalizeNameCapitalization(
+            `${record.nombre} ${record.apellido_paterno} ${record.apellido_materno}`.trim()
+        );
+        const fecha = record.fecha || '-';
+        const hora = record.hora || '-';
+        const tipoRegistro = record.tipo_registro || '-';
+        
+        // Determinar clase CSS según tipo de registro
+        let registroClass = 'registro-otro';
+        if (tipoRegistro.toLowerCase() === 'entrada') {
+            registroClass = 'registro-entrada';
+        } else if (tipoRegistro.toLowerCase() === 'salida') {
+            registroClass = 'registro-salida';
+        } else if (tipoRegistro.toLowerCase() === 'permiso') {
+            registroClass = 'registro-permiso';
+        }
+        
+        tableHTML += `
+            <tr>
+                <td>${fecha}</td>
+                <td>${hora}</td>
+                <td><span class="${registroClass}">${tipoRegistro}</span></td>
+                <td>${nombreCompleto}</td>
+            </tr>
+        `;
+    });
+    
+    tableHTML += `
+            </tbody>
+        </table>
+    `;
+    
+    attendanceList.innerHTML = tableHTML;
 }
 
 function setupEventListeners() {
@@ -552,14 +635,12 @@ async function handleFormSubmit(e) {
         return;
     }
     
-    // CAMBIO: Determinar filtro de usuario según rol
+    // Determinar filtro de usuario según rol
     let filtroUsuario = '';
     if (isAdmin) {
-        // Admin puede filtrar o ver todos
         filtroUsuario = document.getElementById('filtro_usuario')?.value || '';
         console.log('Admin - Filtro usuario:', filtroUsuario || 'Todos');
     } else {
-        // Usuario regular: el backend filtrará automáticamente por su email
         filtroUsuario = '';
         console.log('Usuario regular - Backend filtrará por email automáticamente');
     }
@@ -575,11 +656,23 @@ async function handleFormSubmit(e) {
     
     try {
         await fetchAttendanceData(fechaDesde, fechaHasta, filtroUsuario, ordenamiento);
+        
         if (!attendanceData || attendanceData.length === 0) {
             showStatus(isModoEvidencias ? 'Sin SALIDAS con evidencias' : 'Sin registros en este período', 'error');
             updateSubmitButton();
+            
+            // NUEVO: Mostrar vista vacía para usuarios regulares
+            if (!isAdmin) {
+                displayAttendanceOnScreen();
+            }
             return;
         }
+        
+        // NUEVO: Mostrar asistencias en pantalla para usuarios regulares
+        if (!isAdmin) {
+            displayAttendanceOnScreen();
+        }
+        
         showStatus(`Generando PDF (${attendanceData.length})...`, 'loading');
         submitBtn.textContent = 'Generando PDF...';
         await generatePDF(fechaDesde, fechaHasta, ordenamiento);
