@@ -135,6 +135,25 @@ async function handleCredentialResponse(response) {
     }
 }
 
+/**
+ * Normaliza un nombre: primera letra de cada palabra en mayúscula, resto en minúsculas
+ */
+function normalizeNameCapitalization(name) {
+    if (!name || typeof name !== 'string') {
+        return '';
+    }
+    
+    return name
+        .trim()
+        .toLowerCase()
+        .split(' ')
+        .map(word => {
+            if (word.length === 0) return '';
+            return word.charAt(0).toUpperCase() + word.slice(1);
+        })
+        .join(' ');
+}
+
 // NUEVA FUNCIÓN: Buscar el nombre del usuario en la base de datos
 async function findUserNameInDatabase() {
     try {
@@ -215,10 +234,10 @@ function setupAdminFilters() {
     const fechaDesde = document.getElementById('fecha_desde');
     const fechaHasta = document.getElementById('fecha_hasta');
     if (fechaDesde && fechaHasta) {
-        fechaDesde.addEventListener('change', updateUserFilter);
-        fechaHasta.addEventListener('change', updateUserFilter);
+        fechaDesde.addEventListener('change', );
+        fechaHasta.addEventListener('change', );
     }
-    updateUserFilter();
+    ();
 }
 
 async function updateUserFilter() {
@@ -234,8 +253,10 @@ async function updateUserFilter() {
             userSelect.innerHTML = '<option value="">Todos los usuarios</option>';
             result.users.forEach(user => {
                 const option = document.createElement('option');
-                option.value = user;
-                option.textContent = user;
+                // Normalizar el nombre antes de mostrarlo
+                const normalizedUser = normalizeNameCapitalization(user);
+                option.value = normalizedUser;
+                option.textContent = normalizedUser;
                 userSelect.appendChild(option);
             });
             hideStatus();
@@ -770,7 +791,9 @@ function prepareTableData(ordenamiento = 'nombre') {
     const incluirCampos = getSelectedFields();
     
     return attendanceData.map(record => {
-        const nombreCompleto = `${record.nombre} ${record.apellido_paterno} ${record.apellido_materno}`.trim();
+        const nombreCompleto = normalizeNameCapitalization(
+            `${record.nombre} ${record.apellido_paterno} ${record.apellido_materno}`.trim()
+        );
         const tipoEst = record.tipo_estudiante || '';
         const modalidad = record.modalidad || '';
         const fecha = record.fecha || '';
