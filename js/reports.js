@@ -115,9 +115,6 @@ async function handleCredentialResponse(response) {
         const userInfo = parseJwt(response.credential);
         if (!userInfo) throw new Error('No se procesó usuario');
         
-        // CAMBIO: Ya no validar lista de usuarios autorizados
-        // Todos los usuarios con cuenta Google válida pueden autenticarse
-        
         if (!userInfo.email_verified) {
             showStatus('Cuenta no verificada', 'error');
             return;
@@ -142,9 +139,11 @@ async function handleCredentialResponse(response) {
         if (isAdmin) {
             showAdminControls();
         } else {
-            // NUEVO: Para usuarios regulares, buscar su nombre en la base de datos
-            await findUserNameInDatabase();
             showRegularUserControls();
+            // NUEVO: Cargar asistencias automáticamente para usuarios regulares
+            setTimeout(() => {
+                loadAndDisplayAttendance();
+            }, 500);
         }
         
         showStatus(`Bienvenido ${currentUser.name}!${isAdmin?' (Admin)':''}`, 'success');
@@ -192,6 +191,30 @@ async function findUserNameInDatabase() {
     }
 }
 
+async function loadAndDisplayAttendance() {
+    if (isAdmin) return; // Solo para usuarios regulares
+    
+    const fechaDesde = document.getElementById('fecha_desde').value;
+    const fechaHasta = document.getElementById('fecha_hasta').value;
+    
+    if (!fechaDesde || !fechaHasta || !validateDates()) return;
+    
+    try {
+        showStatus('Cargando asistencias...', 'loading');
+        
+        await fetchAttendanceData(fechaDesde, fechaHasta, '', 'nombre');
+        
+        displayAttendanceOnScreen();
+        
+        hideStatus();
+        
+    } catch (error) {
+        console.error('Error cargando asistencias:', error);
+        showStatus('Error al cargar asistencias', 'error');
+        setTimeout(() => hideStatus(), 3000);
+    }
+}
+
 function showAdminControls() {
     console.log('🔧 Configurando controles de administrador...');
     
@@ -232,6 +255,12 @@ function showRegularUserControls() {
     
     // NUEVO: Establecer rango de fechas a día de hoy
     setMaxDate();
+    
+    // NUEVO: Mostrar sección de asistencias
+    const attendanceSection = document.getElementById('attendance-view-section');
+    if (attendanceSection) {
+        attendanceSection.style.display = 'block';
+    }
 }
 
 function setupAdminFilters() {
@@ -433,10 +462,17 @@ function signOut() {
         updateAuthenticationUI();
         disableForm();
         closeModal();
+        
         const adminSection = document.getElementById('admin-controls-section');
         if (adminSection) adminSection.style.display = 'none';
+        
         const evidenciasCheckbox = document.querySelector('.checkbox-evidencias');
         if (evidenciasCheckbox) evidenciasCheckbox.style.display = 'none';
+        
+        // NUEVO: Ocultar sección de asistencias
+        const attendanceSection = document.getElementById('attendance-view-section');
+        if (attendanceSection) attendanceSection.style.display = 'none';
+        
         showStatus('Sesión cerrada', 'success');
         setTimeout(() => {
             hideStatus();
@@ -480,7 +516,6 @@ function displayAttendanceOnScreen() {
     console.log('=== DISPLAY ATTENDANCE ===');
     console.log('isAdmin:', isAdmin);
     console.log('attendanceData:', attendanceData);
-    console.log('attendanceData.length:', attendanceData?.length);
     
     if (isAdmin) {
         console.log('❌ Es admin, no se muestra tabla');
@@ -491,10 +526,10 @@ function displayAttendanceOnScreen() {
     const attendanceSummary = document.getElementById('attendance-summary');
     const attendanceList = document.getElementById('attendance-list');
     
-    console.log('Elementos encontrados:');
-    console.log('- attendanceSection:', attendanceSection);
-    console.log('- attendanceSummary:', attendanceSummary);
-    console.log('- attendanceList:', attendanceList);
+    if (!attendanceSection) {
+        console.error('❌ No se encontró attendance-view-section');
+        return;
+    }
     
     if (!attendanceData || attendanceData.length === 0) {
         console.log('⚠️ Sin datos de asistencia');
@@ -565,8 +600,24 @@ function displayAttendanceOnScreen() {
 }
 
 function setupEventListeners() {
-    document.getElementById('fecha_desde').addEventListener('change', validateDates);
-    document.getElementById('fecha_hasta').addEventListener('change', validateDates);
+    const fechaDesde = document.getElementById('fecha_desde');
+    const fechaHasta = document.getElementById('fecha_hasta');
+    
+    // Evento para cambio de fechas
+    fechaDesde.addEventListener('change', function() {
+        validateDates();
+        if (!isAdmin) {
+            loadAndDisplayAttendance();
+        }
+    });
+    
+    fechaHasta.addEventListener('change', function() {
+        validateDates();
+        if (!isAdmin) {
+            loadAndDisplayAttendance();
+        }
+    });
+    
     document.getElementById('reportForm').addEventListener('submit', handleFormSubmit);
     setupCheckboxListeners();
 }
