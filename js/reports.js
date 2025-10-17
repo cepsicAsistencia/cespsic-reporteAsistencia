@@ -14,9 +14,9 @@ const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyN49EgjqFoE4
 //const GOOGLE_CLIENT_ID = '154864030871-ck4l5krb7qm68kmp6a7rcq7h072ldm6g.apps.googleusercontent.com';
 //const SHEET_ID = '1YLmEuA-O3Vc1fWRQ1nC_BojOUSVmzBb8QxCCsb5tQwk';
 //const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzBJRaLjii8Y8F_9XC3_n5e--R2bzDXqrfWHeFUIYn3cRct-qVHZ1VEgJEj8XKEU9Ch/exec';
-
-const AUTHORIZED_USERS = ['jose.lino.flores.madrigal@gmail.com','cepsic.atencionpsicologica@gmail.com','adymadrid.22@gmail.com','cespsic@uas.edu.mx'];
-const ADMIN_USERS = ['jose.lino.flores.madrigal@gmail.com','cepsic.atencionpsicologica@gmail.com','cespsic@uas.edu.mx'];
+//'jose.lino.flores.madrigal@gmail.com',
+const AUTHORIZED_USERS = ['cepsic.atencionpsicologica@gmail.com','adymadrid.22@gmail.com','cespsic@uas.edu.mx'];
+const ADMIN_USERS = ['cepsic.atencionpsicologica@gmail.com','cespsic@uas.edu.mx'];
 
 let authenticationAttempts = 0;
 const MAX_AUTH_ATTEMPTS = 3;
