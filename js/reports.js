@@ -27,6 +27,25 @@ let authenticationAttempts = 0;
 const MAX_AUTH_ATTEMPTS = 3;
 const FETCH_CONFIG = {timeout: 90000,maxRetries: 3,retryDelay: 2000};
 
+/**
+ * Normaliza un nombre: primera letra de cada palabra en mayúscula, resto en minúsculas
+ */
+function normalizeNameCapitalization(name) {
+    if (!name || typeof name !== 'string') {
+        return '';
+    }
+    
+    return name
+        .trim()
+        .toLowerCase()
+        .split(' ')
+        .map(word => {
+            if (word.length === 0) return '';
+            return word.charAt(0).toUpperCase() + word.slice(1);
+        })
+        .join(' ');
+}
+
 // ========== INICIALIZACIÓN ==========
 document.addEventListener('DOMContentLoaded', function() {
     console.log('=== DOM CARGADO ===');
@@ -235,8 +254,10 @@ async function updateUserFilter() {
             userSelect.innerHTML = '<option value="">Todos los usuarios</option>';
             result.users.forEach(user => {
                 const option = document.createElement('option');
-                option.value = user;
-                option.textContent = user;
+                // Normalizar el nombre antes de mostrarlo
+                const normalizedUser = normalizeNameCapitalization(user);
+                option.value = normalizedUser;
+                option.textContent = normalizedUser;
                 userSelect.appendChild(option);
             });
             hideStatus();
@@ -771,7 +792,9 @@ function prepareTableData(ordenamiento = 'nombre') {
     const incluirCampos = getSelectedFields();
     
     return attendanceData.map(record => {
-        const nombreCompleto = `${record.nombre} ${record.apellido_paterno} ${record.apellido_materno}`.trim();
+        const nombreCompleto = normalizeNameCapitalization(
+            `${record.nombre} ${record.apellido_paterno} ${record.apellido_materno}`.trim()
+        );
         const tipoEst = record.tipo_estudiante || '';
         const modalidad = record.modalidad || '';
         const fecha = record.fecha || '';
