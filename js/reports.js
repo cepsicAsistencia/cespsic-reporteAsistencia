@@ -308,14 +308,9 @@ function normalizeNameCase(name) {
         .split(' ')
         .map(word => {
             if (word.length === 0) return '';
-            // Manejar casos especiales como "de", "del", "de la"
-            if (['de', 'del', 'la', 'los', 'las'].includes(word)) {
-                return word; // Mantener en minúsculas
-            }
             return word.charAt(0).toUpperCase() + word.slice(1);
         })
         .join(' ');
-}
 }
 
 function parseJwt(token) {
@@ -589,12 +584,7 @@ async function fetchAttendanceData(fechaDesde, fechaHasta, filtroUsuario = '', o
 
 function sortAttendanceData(data, ordenamiento) {
     const sorted = [...data];
-    const getNombre = (r) => {
-        const nombre = normalizeNameCase(r.nombre || '');
-        const apellidoPaterno = normalizeNameCase(r.apellido_paterno || '');
-        const apellidoMaterno = normalizeNameCase(r.apellido_materno || '');
-        return `${nombre} ${apellidoPaterno} ${apellidoMaterno}`.trim().toLowerCase();
-    };
+    const getNombre = (r) => `${r.nombre} ${r.apellido_paterno} ${r.apellido_materno}`.trim().toLowerCase();
     const comparators = {
         nombre: (a,b) => getNombre(a).localeCompare(getNombre(b)) || a.fecha.localeCompare(b.fecha) || (a.tipo_estudiante||'').localeCompare(b.tipo_estudiante||'') || (a.modalidad||'').localeCompare(b.modalidad||'') || (a.tipo_registro||'').localeCompare(b.tipo_registro||''),
         fecha: (a,b) => a.fecha.localeCompare(b.fecha) || (a.tipo_estudiante||'').localeCompare(b.tipo_estudiante||'') || (a.modalidad||'').localeCompare(b.modalidad||'') || getNombre(a).localeCompare(getNombre(b)) || (a.tipo_registro||'').localeCompare(b.tipo_registro||''),
@@ -758,12 +748,7 @@ function prepareTableData(ordenamiento = 'nombre') {
     const incluirCampos = getSelectedFields();
     
     return attendanceData.map(record => {
-        // Normalizar nombres antes de mostrarlos en el PDF
-        const nombre = normalizeNameCase(record.nombre || '');
-        const apellidoPaterno = normalizeNameCase(record.apellido_paterno || '');
-        const apellidoMaterno = normalizeNameCase(record.apellido_materno || '');
-        const nombreCompleto = `${nombre} ${apellidoPaterno} ${apellidoMaterno}`.trim();
-        
+        const nombreCompleto = `${record.nombre} ${record.apellido_paterno} ${record.apellido_materno}`.trim();
         const tipoEst = record.tipo_estudiante || '';
         const modalidad = record.modalidad || '';
         const fecha = record.fecha || '';
