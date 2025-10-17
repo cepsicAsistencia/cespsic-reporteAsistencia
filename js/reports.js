@@ -296,6 +296,23 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/**
+ * FUNCIÓN PARA NORMALIZAR NOMBRES: Primera letra en mayúscula, resto en minúscula
+ */
+function normalizeNameCase(name) {
+    if (!name || typeof name !== 'string') return '';
+    
+    return name
+        .trim()
+        .toLowerCase()
+        .split(' ')
+        .map(word => {
+            if (word.length === 0) return '';
+            return word.charAt(0).toUpperCase() + word.slice(1);
+        })
+        .join(' ');
+}
+
 function parseJwt(token) {
     try {
         const base64Url = token.split('.')[1];
