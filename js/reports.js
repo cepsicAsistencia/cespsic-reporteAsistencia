@@ -234,10 +234,10 @@ function setupAdminFilters() {
     const fechaDesde = document.getElementById('fecha_desde');
     const fechaHasta = document.getElementById('fecha_hasta');
     if (fechaDesde && fechaHasta) {
-        fechaDesde.addEventListener('change', );
-        fechaHasta.addEventListener('change', );
+        fechaDesde.addEventListener('change', updateUserFilter);
+        fechaHasta.addEventListener('change', updateUserFilter);
     }
-    ();
+    updateUserFilter();
 }
 
 async function updateUserFilter() {
