@@ -16,8 +16,8 @@ const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyN49EgjqFoE4
 //const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzBJRaLjii8Y8F_9XC3_n5e--R2bzDXqrfWHeFUIYn3cRct-qVHZ1VEgJEj8XKEU9Ch/exec';
 
 //aministradores
+//'jose.lino.flores.madrigal@gmail.com',
 const ADMIN_USERS = [
-    'jose.lino.flores.madrigal@gmail.com',
     'cepsic.atencionpsicologica@gmail.com',
     'cespsic@uas.edu.mx',
     'adymadrid.22@gmail.com'
