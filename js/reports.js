@@ -477,13 +477,27 @@ function setMaxDate() {
 
 // Nueva función para mostrar asistencias en pantalla (solo usuarios regulares)
 function displayAttendanceOnScreen() {
-    if (isAdmin) return; // Los administradores no necesitan esta vista
+    console.log('=== DISPLAY ATTENDANCE ===');
+    console.log('isAdmin:', isAdmin);
+    console.log('attendanceData:', attendanceData);
+    console.log('attendanceData.length:', attendanceData?.length);
+    
+    if (isAdmin) {
+        console.log('❌ Es admin, no se muestra tabla');
+        return; // Los administradores no necesitan esta vista
+    }
     
     const attendanceSection = document.getElementById('attendance-view-section');
     const attendanceSummary = document.getElementById('attendance-summary');
     const attendanceList = document.getElementById('attendance-list');
     
+    console.log('Elementos encontrados:');
+    console.log('- attendanceSection:', attendanceSection);
+    console.log('- attendanceSummary:', attendanceSummary);
+    console.log('- attendanceList:', attendanceList);
+    
     if (!attendanceData || attendanceData.length === 0) {
+        console.log('⚠️ Sin datos de asistencia');
         attendanceSection.style.display = 'block';
         attendanceSummary.innerHTML = '📊 Sin asistencias en este período';
         attendanceList.innerHTML = `
@@ -495,6 +509,7 @@ function displayAttendanceOnScreen() {
         return;
     }
     
+    console.log('✅ Mostrando', attendanceData.length, 'registros');
     attendanceSection.style.display = 'block';
     attendanceSummary.innerHTML = `📊 Total de asistencias: <strong>${attendanceData.length}</strong>`;
     
@@ -546,6 +561,7 @@ function displayAttendanceOnScreen() {
     `;
     
     attendanceList.innerHTML = tableHTML;
+    console.log('✅ Tabla generada y mostrada');
 }
 
 function setupEventListeners() {
@@ -663,6 +679,7 @@ async function handleFormSubmit(e) {
             
             // NUEVO: Mostrar vista vacía para usuarios regulares
             if (!isAdmin) {
+                console.log('🔍 Llamando displayAttendanceOnScreen (sin datos)');
                 displayAttendanceOnScreen();
             }
             return;
@@ -670,6 +687,7 @@ async function handleFormSubmit(e) {
         
         // NUEVO: Mostrar asistencias en pantalla para usuarios regulares
         if (!isAdmin) {
+            console.log('🔍 Llamando displayAttendanceOnScreen (con datos)');
             displayAttendanceOnScreen();
         }
         
