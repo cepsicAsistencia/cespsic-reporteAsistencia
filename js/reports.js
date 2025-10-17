@@ -26,6 +26,25 @@ let authenticationAttempts = 0;
 const MAX_AUTH_ATTEMPTS = 3;
 const FETCH_CONFIG = {timeout: 90000,maxRetries: 3,retryDelay: 2000};
 
+/**
+ * Normaliza un nombre: primera letra de cada palabra en mayúscula, resto en minúsculas
+ */
+function normalizeNameCapitalization(name) {
+    if (!name || typeof name !== 'string') {
+        return '';
+    }
+    
+    return name
+        .trim()
+        .toLowerCase()
+        .split(' ')
+        .map(word => {
+            if (word.length === 0) return '';
+            return word.charAt(0).toUpperCase() + word.slice(1);
+        })
+        .join(' ');
+}
+
 // ========== INICIALIZACIÓN ==========
 document.addEventListener('DOMContentLoaded', function() {
     console.log('=== DOM CARGADO ===');
@@ -133,25 +152,6 @@ async function handleCredentialResponse(response) {
     } catch (error) {
         showStatus('Error: ' + error.message, 'error');
     }
-}
-
-/**
- * Normaliza un nombre: primera letra de cada palabra en mayúscula, resto en minúsculas
- */
-function normalizeNameCapitalization(name) {
-    if (!name || typeof name !== 'string') {
-        return '';
-    }
-    
-    return name
-        .trim()
-        .toLowerCase()
-        .split(' ')
-        .map(word => {
-            if (word.length === 0) return '';
-            return word.charAt(0).toUpperCase() + word.slice(1);
-        })
-        .join(' ');
 }
 
 // NUEVA FUNCIÓN: Buscar el nombre del usuario en la base de datos
