@@ -929,7 +929,7 @@ function getTableHeaders(ordenamiento = 'nombre') {
     
     const baseHeaders = {
         'nombre': ['Nombre Completo', 'Tipo Est.', 'Modalidad', 'Fecha', 'Hora', 'Tipo Reg.'],
-        'fecha': ['Fecha', 'Hora', 'Tipo Est.', 'Modalidad', 'Nombre Completo', 'Tipo Reg.'],
+        'fecha': ['Fecha', 'Nombre Completo', 'Hora', 'Tipo Est.', 'Modalidad', 'Tipo Reg.'],
         'tipo_estudiante': ['Tipo Est.', 'Fecha', 'Hora', 'Modalidad', 'Nombre Completo', 'Tipo Reg.'],
         'modalidad': ['Modalidad', 'Tipo Est.', 'Fecha', 'Hora', 'Nombre Completo', 'Tipo Reg.'],
         'tipo_registro': ['Tipo Reg.', 'Fecha', 'Hora', 'Tipo Est.', 'Modalidad', 'Nombre Completo']
@@ -968,7 +968,7 @@ function prepareTableData(ordenamiento = 'nombre') {
         
         switch(ordenamiento) {
             case 'fecha':
-                row = [fecha, hora, tipoEst, modalidad, nombreCompleto, tipoReg];
+                row = [fecha, nombreCompleto, hora, tipoEst, modalidad, tipoReg];
                 break;
             case 'tipo_estudiante':
                 row = [tipoEst, fecha, hora, modalidad, nombreCompleto, tipoReg];
