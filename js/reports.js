@@ -1,51 +1,24 @@
-// ========== VARIABLES Y CONFIGURACIÓN ==========
+/**
+ * CESPSIC - Generador de Reportes de Asistencia
+ * Frontend con Firebase Integration
+ * Versión: 5.0 - Firebase Migration
+ */
+
+import { CONFIG, AUTH_CONFIG, CONNECTION_CONFIG, FIREBASE_FIELD_MAPPING, EXCEL_FIELD_ORDER } from './Config.js';
+import { 
+  initializeFirebase, 
+  getAttendanceData, 
+  getUsersInRange, 
+  getUserNameByEmail,
+  testFirebaseConnection 
+} from './firebase-service.js';
+
+// ========== VARIABLES GLOBALES ==========
 let isAuthenticated = false;
 let currentUser = null;
 let attendanceData = [];
 let pdfBlob = null;
 let isAdmin = false;
-
-// CONFIGURACIÓN PRODUCCION
-const GOOGLE_CLIENT_ID = '799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.googleusercontent.com';
-const SHEET_ID = '146Q1MG0AUCnzacqrN5kBENRuiql8o07Uts-l_gimL2I';
-const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyN49EgjqFoE4Gwos_gnu5lM5XERnGfKejEcI-eVuxb68EgJ4wes2DAorINEZ9xVCI/exec';
-
-//PRUEBAS
-//const GOOGLE_CLIENT_ID = '154864030871-ck4l5krb7qm68kmp6a7rcq7h072ldm6g.apps.googleusercontent.com';
-//const SHEET_ID = '1YLmEuA-O3Vc1fWRQ1nC_BojOUSVmzBb8QxCCsb5tQwk';
-//const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzBJRaLjii8Y8F_9XC3_n5e--R2bzDXqrfWHeFUIYn3cRct-qVHZ1VEgJEj8XKEU9Ch/exec';
-
-//aministradores
-//'jose.lino.flores.madrigal@gmail.com',
-const ADMIN_USERS = [
-    'jose.lino.flores.madrigal@gmail.com',
-    'cepsic.atencionpsicologica@gmail.com',
-    'cespsic@uas.edu.mx',
-    'adymadrid.22@gmail.com'
-];
-
-let authenticationAttempts = 0;
-const MAX_AUTH_ATTEMPTS = 3;
-const FETCH_CONFIG = {timeout: 90000,maxRetries: 3,retryDelay: 2000};
-
-/**
- * Normaliza un nombre: primera letra de cada palabra en mayúscula, resto en minúsculas
- */
-function normalizeNameCapitalization(name) {
-    if (!name || typeof name !== 'string') {
-        return '';
-    }
-    
-    return name
-        .trim()
-        .toLowerCase()
-        .split(' ')
-        .map(word => {
-            if (word.length === 0) return '';
-            return word.charAt(0).toUpperCase() + word.slice(1);
-        })
-        .join(' ');
-}
 
 // ========== INICIALIZACIÓN ==========
 document.addEventListener('DOMContentLoaded', function() {
@@ -53,17 +26,44 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeApp();
 });
 
-function initializeApp() {
+async function initializeApp() {
     const container = document.getElementById('signin-button-container');
     if (!container) return;
-    showLoadingMessage('Iniciando...');
-    setupEventListeners();
-    setMaxDate();
-    initializeGoogleSignInWithRetry();
+    
+    showLoadingMessage('Iniciando aplicación...');
+    
+    try {
+        // Inicializar Firebase primero
+        await initializeFirebase();
+        console.log('✅ Firebase inicializado');
+        
+        // Configurar event listeners
+        setupEventListeners();
+        setMaxDate();
+        
+        // Inicializar Google Sign-In
+        initializeGoogleSignInWithRetry();
+        
+        // Test de conexión Firebase
+        setTimeout(checkFirebaseAvailability, 2000);
+        
+    } catch (error) {
+        console.error('❌ Error inicializando app:', error);
+        showAuthenticationError('Error de inicialización: ' + error.message);
+    }
 }
 
 function showLoadingMessage(msg) {
-    document.getElementById('signin-button-container').innerHTML = `<div style="text-align:center;padding:20px;color:#666;"><div style="display:inline-block;animation:spin 1s linear infinite;">🔄</div>${msg}</div><style>@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}</style>`;
+    const container = document.getElementById('signin-button-container');
+    if (container) {
+        container.innerHTML = `
+            <div style="text-align:center;padding:20px;color:#666;">
+                <div style="display:inline-block;animation:spin 1s linear infinite;">🔄</div> 
+                ${msg}
+            </div>
+            <style>@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}</style>
+        `;
+    }
 }
 
 function initializeGoogleSignInWithRetry() {
@@ -83,54 +83,66 @@ function initializeGoogleSignInWithRetry() {
 
 function initializeGoogleSignIn() {
     try {
-        google.accounts.id.initialize({client_id:GOOGLE_CLIENT_ID,callback:handleCredentialResponse,auto_select:false,cancel_on_tap_outside:true,use_fedcm_for_prompt:false});
+        google.accounts.id.initialize({
+            client_id: AUTH_CONFIG.GOOGLE_CLIENT_ID,
+            callback: handleCredentialResponse,
+            auto_select: false,
+            cancel_on_tap_outside: true,
+            use_fedcm_for_prompt: false
+        });
+        
         const container = document.getElementById("signin-button-container");
         container.innerHTML = '';
-        google.accounts.id.renderButton(container, {theme:"filled_blue",size:"large",text:"signin_with",shape:"rectangular",logo_alignment:"left",width:"280",locale:"es"});
-        setTimeout(checkBackendAvailability, 2000);
+        google.accounts.id.renderButton(container, {
+            theme: "filled_blue",
+            size: "large",
+            text: "signin_with",
+            shape: "rectangular",
+            logo_alignment: "left",
+            width: "280",
+            locale: "es"
+        });
+        
     } catch (error) {
         showAuthenticationError('Error: ' + error.message);
     }
 }
 
-async function checkBackendAvailability() {
+async function checkFirebaseAvailability() {
     try {
-        const response = await fetchWithTimeoutAndRetry(GOOGLE_SCRIPT_URL + '?action=test_permissions', {method:'GET'});
-        if (response.ok) {
-            showStatus('Sistema listo', 'success');
+        const result = await testFirebaseConnection();
+        if (result.success) {
+            showStatus('✅ Sistema listo - Conectado a Firebase', 'success');
             setTimeout(() => hideStatus(), 3000);
+        } else {
+            showStatus('⚠️ Advertencia: ' + result.message, 'error');
         }
     } catch (error) {
-        console.warn('Backend warning:', error.message);
+        console.warn('Firebase warning:', error.message);
     }
 }
 
 // ========== AUTENTICACIÓN ==========
 async function handleCredentialResponse(response) {
     try {
-        authenticationAttempts++;
-        if (authenticationAttempts > MAX_AUTH_ATTEMPTS) {
-            showStatus('Demasiados intentos', 'error');
-            return;
-        }
         const userInfo = parseJwt(response.credential);
         if (!userInfo) throw new Error('No se procesó usuario');
         
         if (!userInfo.email_verified) {
-            showStatus('Cuenta no verificada', 'error');
+            showStatus('❌ Cuenta no verificada', 'error');
             return;
         }
         
         // Verificar si es administrador
-        isAdmin = ADMIN_USERS.includes(userInfo.email);
+        isAdmin = AUTH_CONFIG.ADMIN_USERS.includes(userInfo.email);
         
         currentUser = {
-            id:userInfo.sub,
-            email:userInfo.email,
-            name:userInfo.name,
-            picture:userInfo.picture,
-            email_verified:userInfo.email_verified,
-            isAdmin:isAdmin
+            id: userInfo.sub,
+            email: userInfo.email,
+            name: userInfo.name,
+            picture: userInfo.picture,
+            email_verified: userInfo.email_verified,
+            isAdmin: isAdmin
         };
         
         isAuthenticated = true;
@@ -141,98 +153,53 @@ async function handleCredentialResponse(response) {
             showAdminControls();
         } else {
             showRegularUserControls();
-            // NUEVO: Cargar asistencias automáticamente para usuarios regulares
+            // Cargar asistencias automáticamente para usuarios regulares
             setTimeout(() => {
                 loadAndDisplayAttendance();
             }, 500);
         }
         
-        showStatus(`Bienvenido ${currentUser.name}!${isAdmin?' (Admin)':''}`, 'success');
+        showStatus(`✅ Bienvenido ${currentUser.name}!${isAdmin?' (Admin)':''}`, 'success');
         setTimeout(() => hideStatus(), 4000);
         
     } catch (error) {
-        showStatus('Error: ' + error.message, 'error');
+        showStatus('❌ Error: ' + error.message, 'error');
     }
 }
 
-// NUEVA FUNCIÓN: Buscar el nombre del usuario en la base de datos
-async function findUserNameInDatabase() {
+function parseJwt(token) {
     try {
-        // Obtener el rango de fechas por defecto (último mes)
-        const fechaHasta = new Date().toLocaleDateString('en-CA', {timeZone:'America/Mazatlan'});
-        const fechaDesde = new Date();
-        fechaDesde.setMonth(fechaDesde.getMonth() - 6); // Buscar en los últimos 6 meses
-        const fechaDesdeStr = fechaDesde.toISOString().split('T')[0];
-        
-        showStatus('Identificando usuario...', 'loading');
-        
-        // Hacer una búsqueda amplia para encontrar el nombre del usuario
-        const result = await makeBackendRequestWithRetry('get_attendance_data', {
-            fechaDesde: fechaDesdeStr,
-            fechaHasta: fechaHasta,
-            filtroUsuario: '', // Sin filtro para buscar todos
-            ordenamiento: 'nombre'
-        });
-        
-        if (result.success && result.data && result.data.length > 0) {
-            // Buscar el nombre que coincida con el email del usuario
-            // Esto requiere que el backend tenga lógica para asociar email → nombre
-            // Por ahora, intentaremos encontrar el nombre más común en sus registros
-            
-            // Si no podemos determinar automáticamente, dejar vacío
-            userFullName = '';
-            
-            hideStatus();
-        } else {
-            hideStatus();
-        }
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(
+            atob(base64).split('').map(c => 
+                '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+            ).join('')
+        );
+        return JSON.parse(jsonPayload);
     } catch (error) {
-        console.warn('No se pudo identificar automáticamente el usuario:', error);
-        hideStatus();
+        return null;
     }
 }
 
-async function loadAndDisplayAttendance() {
-    if (isAdmin) return; // Solo para usuarios regulares
-    
-    const fechaDesde = document.getElementById('fecha_desde').value;
-    const fechaHasta = document.getElementById('fecha_hasta').value;
-    
-    if (!fechaDesde || !fechaHasta || !validateDates()) return;
-    
-    try {
-        showStatus('Cargando asistencias...', 'loading');
-        
-        await fetchAttendanceData(fechaDesde, fechaHasta, '', 'nombre');
-        
-        displayAttendanceOnScreen();
-        
-        hideStatus();
-        
-    } catch (error) {
-        console.error('Error cargando asistencias:', error);
-        showStatus('Error al cargar asistencias', 'error');
-        setTimeout(() => hideStatus(), 3000);
-    }
-}
-
+// ========== CONTROL DE INTERFAZ ==========
 function showAdminControls() {
     console.log('🔧 Configurando controles de administrador...');
     
     const adminSection = document.getElementById('admin-controls-section');
     if (adminSection) {
         adminSection.style.display = 'block';
-        console.log('✅ Sección de admin visible');
-    } else {
-        console.error('❌ No se encontró admin-controls-section');
     }
     
     const evidenciasCheckbox = document.querySelector('.checkbox-evidencias');
     if (evidenciasCheckbox) {
         evidenciasCheckbox.style.display = 'flex';
-        console.log('✅ Checkbox de evidencias visible');
-    } else {
-        console.error('❌ No se encontró checkbox-evidencias');
+    }
+    
+    // Mostrar botones de reportes especiales (horas y Excel)
+    const reportTypeSection = document.getElementById('report-type-section');
+    if (reportTypeSection) {
+        reportTypeSection.style.display = 'block';
     }
     
     setupAdminFilters();
@@ -241,30 +208,31 @@ function showAdminControls() {
 function showRegularUserControls() {
     console.log('👤 Configurando controles de usuario regular...');
     
-    // Ocultar controles de admin
     const adminSection = document.getElementById('admin-controls-section');
     if (adminSection) {
         adminSection.style.display = 'none';
-        console.log('✅ Sección de admin oculta');
     }
     
     const evidenciasCheckbox = document.querySelector('.checkbox-evidencias');
     if (evidenciasCheckbox) {
         evidenciasCheckbox.style.display = 'none';
-        console.log('✅ Checkbox de evidencias oculto');
     }
     
-    // NUEVO: Establecer rango de fechas a día de hoy
+    // Ocultar botones de reportes especiales
+    const reportTypeSection = document.getElementById('report-type-section');
+    if (reportTypeSection) {
+        reportTypeSection.style.display = 'none';
+    }
+    
     setMaxDate();
     
-    // NUEVO: Mostrar sección de asistencias
     const attendanceSection = document.getElementById('attendance-view-section');
     if (attendanceSection) {
         attendanceSection.style.display = 'block';
     }
 }
 
-function setupAdminFilters() {
+async function setupAdminFilters() {
     const fechaDesde = document.getElementById('fecha_desde');
     const fechaHasta = document.getElementById('fecha_hasta');
     if (fechaDesde && fechaHasta) {
@@ -276,143 +244,1184 @@ function setupAdminFilters() {
 
 async function updateUserFilter() {
     if (!isAdmin) return;
+    
     const fechaDesde = document.getElementById('fecha_desde').value;
     const fechaHasta = document.getElementById('fecha_hasta').value;
     const userSelect = document.getElementById('filtro_usuario');
+    
     if (!fechaDesde || !fechaHasta || !userSelect) return;
+    
     try {
         showStatus('Cargando usuarios...', 'loading');
-        const result = await makeBackendRequestWithRetry('get_users_in_range', {fechaDesde,fechaHasta});
-        if (result.success && result.users) {
-            userSelect.innerHTML = '<option value="">Todos los usuarios</option>';
-            result.users.forEach(user => {
-                const option = document.createElement('option');
-                // Normalizar el nombre antes de mostrarlo
-                const normalizedUser = normalizeNameCapitalization(user);
-                option.value = normalizedUser;
-                option.textContent = normalizedUser;
-                userSelect.appendChild(option);
-            });
-            hideStatus();
-        }
+        
+        const users = await getUsersInRange(fechaDesde, fechaHasta);
+        
+        userSelect.innerHTML = '<option value="">Todos los usuarios</option>';
+        users.forEach(user => {
+            const option = document.createElement('option');
+            option.value = user;
+            option.textContent = user;
+            userSelect.appendChild(option);
+        });
+        
+        hideStatus();
+        
     } catch (error) {
-        console.error('Error usuarios:', error);
+        console.error('Error cargando usuarios:', error);
         hideStatus();
     }
 }
 
-// ========== COMUNICACIÓN BACKEND (sin cambios en estas funciones) ==========
-async function makeBackendRequestWithRetry(action, additionalData = {}) {
-    let lastError = null;
-    for (let attempt = 1; attempt <= FETCH_CONFIG.maxRetries; attempt++) {
-        try {
-            console.log(`🔄 Intento ${attempt}/${FETCH_CONFIG.maxRetries}: ${action}`);
-            const result = await makeBackendRequest(action, additionalData);
-            console.log('✅ OK');
-            return result;
-        } catch (error) {
-            lastError = error;
-            console.warn(`⚠️ Intento ${attempt} falló:`, error.message);
-            if (attempt < FETCH_CONFIG.maxRetries) {
-                const delay = FETCH_CONFIG.retryDelay * attempt;
-                await sleep(delay);
+async function loadAndDisplayAttendance() {
+    if (isAdmin) return;
+    
+    const fechaDesde = document.getElementById('fecha_desde').value;
+    const fechaHasta = document.getElementById('fecha_hasta').value;
+    
+    if (!fechaDesde || !fechaHasta || !validateDates()) return;
+    
+    try {
+        showStatus('Cargando asistencias...', 'loading');
+        
+        await fetchAttendanceDataFromFirebase();
+        displayAttendanceOnScreen();
+        
+        hideStatus();
+        
+    } catch (error) {
+        console.error('Error cargando asistencias:', error);
+        showStatus('❌ Error al cargar asistencias', 'error');
+        setTimeout(() => hideStatus(), 3000);
+    }
+}
+
+function displayAttendanceOnScreen() {
+    console.log('=== DISPLAY ATTENDANCE ===');
+    
+    if (isAdmin) {
+        return;
+    }
+    
+    const attendanceSection = document.getElementById('attendance-view-section');
+    const attendanceSummary = document.getElementById('attendance-summary');
+    const attendanceList = document.getElementById('attendance-list');
+    
+    if (!attendanceSection) return;
+    
+    if (!attendanceData || attendanceData.length === 0) {
+        attendanceSection.style.display = 'block';
+        attendanceSummary.innerHTML = '📊 Sin asistencias en este período';
+        attendanceList.innerHTML = `
+            <div class="no-attendance-message">
+                <div class="icon">🔭</div>
+                <p>No hay registros de asistencia para el período seleccionado.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    attendanceSection.style.display = 'block';
+    attendanceSummary.innerHTML = `📊 Total de asistencias: <strong>${attendanceData.length}</strong>`;
+    
+    let tableHTML = `
+        <table class="attendance-table">
+            <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Hora</th>
+                    <th>Tipo de Registro</th>
+                    <th>Nombre</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    attendanceData.forEach(record => {
+        const nombreCompleto = `${record.nombre || ''} ${record.apellidoPaterno || ''} ${record.apellidoMaterno || ''}`.trim();
+        const fecha = record.fecha || '-';
+        const hora = record.hora || '-';
+        const tipoRegistro = record.tipoRegistro || '-';
+        
+        let registroClass = 'registro-otro';
+        if (tipoRegistro.toLowerCase() === 'entrada') {
+            registroClass = 'registro-entrada';
+        } else if (tipoRegistro.toLowerCase() === 'salida') {
+            registroClass = 'registro-salida';
+        } else if (tipoRegistro.toLowerCase() === 'permiso') {
+            registroClass = 'registro-permiso';
+        }
+        
+        tableHTML += `
+            <tr>
+                <td>${fecha}</td>
+                <td>${hora}</td>
+                <td><span class="${registroClass}">${tipoRegistro}</span></td>
+                <td>${nombreCompleto}</td>
+            </tr>
+        `;
+    });
+    
+    tableHTML += `
+            </tbody>
+        </table>
+    `;
+    
+    attendanceList.innerHTML = tableHTML;
+}
+
+// ========== OBTENCIÓN DE DATOS ==========
+async function fetchAttendanceDataFromFirebase() {
+    try {
+        const fechaDesde = document.getElementById('fecha_desde').value;
+        const fechaHasta = document.getElementById('fecha_hasta').value;
+        
+        const filters = {
+            fechaDesde: fechaDesde,
+            fechaHasta: fechaHasta,
+            filtroTipo: document.getElementById('filtro_tipo').value,
+            filtroModalidad: document.getElementById('filtro_modalidad').value,
+            filtroTipoRegistro: '',
+            filtroUsuario: ''
+        };
+        
+        // Si es admin, agregar filtro de usuario si existe
+        if (isAdmin) {
+            const userFilter = document.getElementById('filtro_usuario');
+            if (userFilter) {
+                filters.filtroUsuario = userFilter.value;
             }
         }
-    }
-    throw new Error(`Error tras ${FETCH_CONFIG.maxRetries} intentos: ${lastError.message}`);
-}
-
-async function makeBackendRequest(action, additionalData = {}) {
-    const requestData = {action,userEmail:currentUser.email,timestamp:new Date().toISOString(),...additionalData};
-    try {
-        const jsonpResponse = await fetchWithJSONP(GOOGLE_SCRIPT_URL, requestData, FETCH_CONFIG.timeout);
-        if (jsonpResponse && jsonpResponse.success !== undefined) return jsonpResponse;
-    } catch (jsonpError) {
-        console.log('⚠️ JSONP falló');
-    }
-    try {
-        const response = await fetchWithTimeoutAndRetry(GOOGLE_SCRIPT_URL, {method:'POST',mode:'cors',headers:{'Content-Type':'application/json'},body:JSON.stringify(requestData)});
-        if (response.ok) {
-            return await response.json();
-        } else {
-            throw new Error(`HTTP ${response.status}`);
+        
+        // Verificar si está en modo evidencias
+        const incluirCampos = getSelectedFields();
+        if (incluirCampos.includes('evidencias_solo')) {
+            filters.filtroTipoRegistro = 'salida';
         }
-    } catch (fetchError) {
-        throw new Error('No conectó: ' + fetchError.message);
-    }
-}
-
-async function fetchWithTimeoutAndRetry(url, options = {}) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), FETCH_CONFIG.timeout);
-    try {
-        const response = await fetch(url, {...options,signal:controller.signal});
-        clearTimeout(timeoutId);
-        return response;
+        
+        attendanceData = await getAttendanceData(currentUser.email, isAdmin, filters);
+        
+        // Ordenar si es necesario
+        const ordenamiento = isAdmin ? (document.getElementById('orden_datos')?.value || 'nombre') : 'nombre';
+        if (ordenamiento) {
+            attendanceData = sortAttendanceData(attendanceData, ordenamiento);
+        }
+        
+        console.log(`✅ Datos obtenidos: ${attendanceData.length} registros`);
+        
     } catch (error) {
-        clearTimeout(timeoutId);
-        if (error.name === 'AbortError') throw new Error(`Timeout ${FETCH_CONFIG.timeout}ms`);
+        console.error('❌ Error obteniendo datos:', error);
+        attendanceData = [];
         throw error;
     }
 }
 
-async function fetchWithJSONP(url, data, timeout = 90000) {
-    return new Promise((resolve, reject) => {
-        const callbackName = 'jsonp_callback_' + Math.round(100000 * Math.random());
-        const script = document.createElement('script');
-        const params = new URLSearchParams({...data,callback:callbackName});
-        window[callbackName] = function(response) {
-            cleanup();
-            resolve(response);
-        };
-        function cleanup() {
-            delete window[callbackName];
-            if (script.parentNode) script.parentNode.removeChild(script);
+function sortAttendanceData(data, ordenamiento) {
+    const sorted = [...data];
+    const getNombre = (r) => `${r.nombre || ''} ${r.apellidoPaterno || ''} ${r.apellidoMaterno || ''}`.trim().toLowerCase();
+    
+    const comparators = {
+        nombre: (a, b) => getNombre(a).localeCompare(getNombre(b)) || (a.fecha || '').localeCompare(b.fecha || ''),
+        fecha: (a, b) => (a.fecha || '').localeCompare(b.fecha || '') || getNombre(a).localeCompare(getNombre(b)),
+        tipo_estudiante: (a, b) => (a.tipoEstudiante || '').localeCompare(b.tipoEstudiante || '') || (a.fecha || '').localeCompare(b.fecha || ''),
+        modalidad: (a, b) => (a.modalidad || '').localeCompare(b.modalidad || '') || (a.fecha || '').localeCompare(b.fecha || ''),
+        tipo_registro: (a, b) => (a.tipoRegistro || '').localeCompare(b.tipoRegistro || '') || (a.fecha || '').localeCompare(b.fecha || '')
+    };
+    
+    sorted.sort(comparators[ordenamiento] || comparators.nombre);
+    return sorted;
+}
+
+// Continúa en la siguiente parte...
+// ========== CONTINUACIÓN reports.js - Parte 2 ==========
+
+// ========== MANEJO DE FORMULARIO ==========
+function setupEventListeners() {
+    const fechaDesde = document.getElementById('fecha_desde');
+    const fechaHasta = document.getElementById('fecha_hasta');
+    
+    fechaDesde.addEventListener('change', function() {
+        validateDates();
+        if (!isAdmin) {
+            loadAndDisplayAttendance();
         }
-        const timeoutId = setTimeout(() => {
-            cleanup();
-            reject(new Error(`Timeout JSONP`));
-        }, timeout);
-        script.onload = () => clearTimeout(timeoutId);
-        script.onerror = () => {
-            cleanup();
-            clearTimeout(timeoutId);
-            reject(new Error('Error script'));
-        };
-        script.src = `${url}?${params.toString()}`;
-        document.head.appendChild(script);
+    });
+    
+    fechaHasta.addEventListener('change', function() {
+        validateDates();
+        if (!isAdmin) {
+            loadAndDisplayAttendance();
+        }
+    });
+    
+    document.getElementById('reportForm').addEventListener('submit', handleFormSubmit);
+    
+    // Event listeners para botones de reportes especiales
+    const btnHoras = document.getElementById('btn-reporte-horas');
+    if (btnHoras) {
+        btnHoras.addEventListener('click', handleReporteHoras);
+    }
+    
+    const btnExcel = document.getElementById('btn-export-excel');
+    if (btnExcel) {
+        btnExcel.addEventListener('click', handleExportExcel);
+    }
+    
+    setupCheckboxListeners();
+}
+
+function setupCheckboxListeners() {
+    ['incluir_intervenciones','incluir_actividades','incluir_evidencias','incluir_comentarios','incluir_permisos'].forEach(id => {
+        const checkbox = document.getElementById(id);
+        if (checkbox) {
+            checkbox.addEventListener('change', function() {
+                if (this.checked) {
+                    const evidenciasSolo = document.getElementById('incluir_evidencias_solo');
+                    if (evidenciasSolo && evidenciasSolo.checked) {
+                        evidenciasSolo.checked = false;
+                        updateCheckboxStyles();
+                    }
+                }
+            });
+        }
     });
 }
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+function handleEvidenciasChange(checkbox) {
+    if (checkbox.checked) {
+        ['incluir_intervenciones','incluir_actividades','incluir_evidencias','incluir_comentarios','incluir_permisos'].forEach(id => {
+            const cb = document.getElementById(id);
+            if (cb) cb.checked = false;
+        });
+        showStatus('⚠️ Modo "Solo Evidencias" activado', 'loading');
+        setTimeout(() => hideStatus(), 6000);
+    }
+    updateCheckboxStyles();
 }
 
-function parseJwt(token) {
-    try {
-        const base64Url = token.split('.')[1];
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-        const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
-        return JSON.parse(jsonPayload);
-    } catch (error) {
-        return null;
+window.handleEvidenciasChange = handleEvidenciasChange;
+
+function updateCheckboxStyles() {
+    const evidenciasSolo = document.getElementById('incluir_evidencias_solo');
+    const evidenciasItem = document.querySelector('.checkbox-evidencias');
+    if (evidenciasSolo && evidenciasSolo.checked && evidenciasItem) {
+        evidenciasItem.style.background = '#e8f5e8';
+        evidenciasItem.style.borderColor = '#4caf50';
+        evidenciasItem.style.boxShadow = '0 2px 8px rgba(76,175,80,0.2)';
+    } else if (evidenciasItem) {
+        evidenciasItem.style.background = '';
+        evidenciasItem.style.borderColor = '';
+        evidenciasItem.style.boxShadow = '';
     }
 }
 
-// ========== UI ==========
+function validateDates() {
+    const fechaDesde = document.getElementById('fecha_desde').value;
+    const fechaHasta = document.getElementById('fecha_hasta').value;
+    const today = new Date().toISOString().split('T')[0];
+    
+    if (fechaHasta > today) {
+        showStatus('❌ Fecha futura no válida', 'error');
+        document.getElementById('fecha_hasta').value = today;
+        return false;
+    }
+    
+    if (fechaDesde && fechaHasta && fechaDesde > fechaHasta) {
+        showStatus('❌ Rango de fechas inválido', 'error');
+        document.getElementById('fecha_desde').value = fechaHasta;
+        return false;
+    }
+    
+    hideStatus();
+    return true;
+}
+
+async function handleFormSubmit(e) {
+    e.preventDefault();
+    
+    if (!isAuthenticated || !currentUser) {
+        showStatus('❌ Debe autenticarse', 'error');
+        return;
+    }
+    
+    const fechaDesde = document.getElementById('fecha_desde').value;
+    const fechaHasta = document.getElementById('fecha_hasta').value;
+    
+    if (!fechaDesde || !fechaHasta || !validateDates()) return;
+    
+    const checkboxes = document.querySelectorAll('input[name="incluir_campos[]"]:checked');
+    if (checkboxes.length === 0) {
+        showStatus('❌ Seleccione al menos un campo', 'error');
+        return;
+    }
+    
+    showStatus('⏳ Obteniendo datos...', 'loading');
+    const submitBtn = document.getElementById('submit_btn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = '⏳ Procesando...';
+    
+    try {
+        await fetchAttendanceDataFromFirebase();
+        
+        if (!attendanceData || attendanceData.length === 0) {
+            const isModoEvidencias = getSelectedFields().includes('evidencias_solo');
+            showStatus(
+                isModoEvidencias ? '⚠️ Sin SALIDAS con evidencias' : '⚠️ Sin registros en este período', 
+                'error'
+            );
+            updateSubmitButton();
+            
+            if (!isAdmin) {
+                displayAttendanceOnScreen();
+            }
+            return;
+        }
+        
+        if (!isAdmin) {
+            displayAttendanceOnScreen();
+        }
+        
+        showStatus(`⏳ Generando PDF (${attendanceData.length} registros)...`, 'loading');
+        submitBtn.textContent = '⏳ Generando PDF...';
+        
+        await generatePDFAsistencias(fechaDesde, fechaHasta);
+        showDownloadModal(fechaDesde, fechaHasta, 'asistencias');
+        
+        hideStatus();
+        updateSubmitButton();
+        
+    } catch (error) {
+        console.error('❌ Error:', error);
+        showStatus('❌ Error: ' + error.message, 'error');
+        updateSubmitButton();
+    }
+}
+
+// ========== GENERACIÓN DE REPORTE PDF DE ASISTENCIAS ==========
+async function generatePDFAsistencias(fechaDesde, fechaHasta) {
+    const {jsPDF} = window.jspdf;
+    const doc = new jsPDF('l', 'mm', 'a4');
+    doc.setFont('helvetica');
+    
+    const ordenamiento = isAdmin ? (document.getElementById('orden_datos')?.value || 'nombre') : 'nombre';
+    addPDFHeader(doc, fechaDesde, fechaHasta, ordenamiento);
+    
+    const tableData = prepareTableDataAsistencias(ordenamiento);
+    const incluirCampos = getSelectedFields();
+    const isModoEvidencias = incluirCampos.includes('evidencias_solo');
+    
+    if (isModoEvidencias) {
+        generatePDFEvidenciasMode(doc, tableData, ordenamiento);
+    } else {
+        generatePDFNormalMode(doc, tableData, ordenamiento);
+    }
+    
+    addPDFFooter(doc);
+    pdfBlob = doc.output('blob');
+}
+
+function generatePDFNormalMode(doc, tableData, ordenamiento) {
+    const headers = getTableHeaders(ordenamiento);
+    const columnStyles = {};
+    
+    headers.forEach((header, index) => {
+        if (['Interv.', 'Niños', 'Adoles.', 'Adult.', 'May.60', 'Fam.', 'Tot.Ev.'].includes(header)) {
+            columnStyles[index] = {cellWidth: 12, fontSize: 6, halign: 'center'};
+        } else if (header === 'Actividades') {
+            columnStyles[index] = {cellWidth: 40, fontSize: 5};
+        } else if (header === 'Comentarios') {
+            columnStyles[index] = {cellWidth: 35, fontSize: 5};
+        } else {
+            columnStyles[index] = {fontSize: 6};
+        }
+    });
+    
+    doc.autoTable({
+        head: [headers],
+        body: tableData,
+        startY: 40,
+        styles: {fontSize: 6, cellPadding: 1.5, lineColor: [200,200,200], lineWidth: 0.1},
+        headStyles: {fillColor: [102,126,234], textColor: 255, fontStyle: 'bold', fontSize: 6},
+        alternateRowStyles: {fillColor: [248,249,250]},
+        columnStyles: columnStyles
+    });
+}
+
+function generatePDFEvidenciasMode(doc, tableData, ordenamiento) {
+    const headers = getTableHeaders(ordenamiento);
+    const columnStyles = {};
+    
+    headers.forEach((header, index) => {
+        if (header === 'Links') {
+            columnStyles[index] = {cellWidth: 50, fontSize: 5, textColor: [0,0,255]};
+        } else if (header === 'Nombres Evid.') {
+            columnStyles[index] = {cellWidth: 35, fontSize: 5};
+        } else if (header === 'Carpeta') {
+            columnStyles[index] = {cellWidth: 30, fontSize: 5};
+        } else {
+            columnStyles[index] = {fontSize: 6};
+        }
+    });
+    
+    doc.autoTable({
+        head: [headers],
+        body: tableData,
+        startY: 40,
+        styles: {fontSize: 6, cellPadding: 1.5, lineColor: [200,200,200], lineWidth: 0.1},
+        headStyles: {fillColor: [102,126,234], textColor: 255, fontStyle: 'bold', fontSize: 6},
+        alternateRowStyles: {fillColor: [248,249,250]},
+        columnStyles: columnStyles,
+        didDrawCell: function(data) {
+            const linksIndex = headers.indexOf('Links');
+            if (data.column.index === linksIndex && data.section === 'body') {
+                const cellContent = tableData[data.row.index][linksIndex];
+                if (cellContent && cellContent.includes('https://')) {
+                    const linksData = parseLinksFromGeneratedText(cellContent);
+                    linksData.forEach((linkData, index) => {
+                        if (linkData.url) {
+                            const linkY = data.cell.y + (index * 2.5) + 2;
+                            doc.link(data.cell.x + 1, linkY - 1, data.cell.width - 2, 2.5, {url: linkData.url});
+                        }
+                    });
+                }
+            }
+        }
+    });
+}
+
+function addPDFHeader(doc, fechaDesde, fechaHasta, ordenamiento) {
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('REPORTE DE ASISTENCIAS - CESPSIC', 148, 12, {align: 'center'});
+    
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Generado por: ${currentUser.name}`, 10, 20);
+    doc.text(`Email: ${currentUser.email}`, 10, 24);
+    doc.text(`Fecha: ${new Date().toLocaleString('es-MX')}`, 10, 28);
+    doc.text(`Período: ${fechaDesde} al ${fechaHasta}`, 10, 32);
+    doc.text(`Total registros: ${attendanceData.length}`, 10, 36);
+    
+    if (ordenamiento) {
+        const ordenTexto = {
+            'nombre': 'Nombre',
+            'fecha': 'Fecha',
+            'tipo_estudiante': 'Tipo Estudiante',
+            'modalidad': 'Modalidad',
+            'tipo_registro': 'Tipo Registro'
+        };
+        doc.text(`Ordenado por: ${ordenTexto[ordenamiento] || ordenamiento}`, 200, 36);
+    }
+}
+
+function addPDFFooter(doc) {
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(7);
+        doc.text(`Página ${i} de ${pageCount} - CESPSIC`, 148, 205, {align: 'center'});
+    }
+}
+
+function getTableHeaders(ordenamiento = 'nombre') {
+    const incluirCampos = getSelectedFields();
+    let headers = [];
+    
+    const baseHeaders = {
+        'nombre': ['Nombre Completo', 'Tipo Est.', 'Modalidad', 'Fecha', 'Hora', 'Tipo Reg.'],
+        'fecha': ['Fecha', 'Nombre Completo', 'Hora', 'Tipo Est.', 'Modalidad', 'Tipo Reg.'],
+        'tipo_estudiante': ['Tipo Est.', 'Fecha', 'Hora', 'Modalidad', 'Nombre Completo', 'Tipo Reg.'],
+        'modalidad': ['Modalidad', 'Tipo Est.', 'Fecha', 'Hora', 'Nombre Completo', 'Tipo Reg.'],
+        'tipo_registro': ['Tipo Reg.', 'Fecha', 'Hora', 'Tipo Est.', 'Modalidad', 'Nombre Completo']
+    };
+    
+    headers = baseHeaders[ordenamiento] || baseHeaders['nombre'];
+    
+    if (incluirCampos.includes('evidencias_solo')) {
+        headers.push('Nombres Evid.', 'Carpeta', 'Links');
+    } else {
+        if (incluirCampos.includes('intervenciones')) {
+            headers.push('Interv.', 'Niños', 'Adoles.', 'Adult.', 'May.60', 'Fam.');
+        }
+        if (incluirCampos.includes('actividades')) headers.push('Actividades');
+        if (incluirCampos.includes('evidencias')) headers.push('Tot.Ev.');
+        if (incluirCampos.includes('comentarios')) headers.push('Comentarios');
+        if (incluirCampos.includes('permisos')) headers.push('Det.Permiso', 'Det.Otro');
+    }
+    
+    return headers;
+}
+
+function prepareTableDataAsistencias(ordenamiento = 'nombre') {
+    const incluirCampos = getSelectedFields();
+    
+    return attendanceData.map(record => {
+        const nombreCompleto = `${record.nombre || ''} ${record.apellidoPaterno || ''} ${record.apellidoMaterno || ''}`.trim();
+        const tipoEst = record.tipoEstudiante || '';
+        const modalidad = record.modalidad || '';
+        const fecha = record.fecha || '';
+        const hora = record.hora || '';
+        const tipoReg = record.tipoRegistro || '';
+        
+        let row = [];
+        
+        switch(ordenamiento) {
+            case 'fecha':
+                row = [fecha, nombreCompleto, hora, tipoEst, modalidad, tipoReg];
+                break;
+            case 'tipo_estudiante':
+                row = [tipoEst, fecha, hora, modalidad, nombreCompleto, tipoReg];
+                break;
+            case 'modalidad':
+                row = [modalidad, tipoEst, fecha, hora, nombreCompleto, tipoReg];
+                break;
+            case 'tipo_registro':
+                row = [tipoReg, fecha, hora, tipoEst, modalidad, nombreCompleto];
+                break;
+            default:
+                row = [nombreCompleto, tipoEst, modalidad, fecha, hora, tipoReg];
+        }
+        
+        if (incluirCampos.includes('evidencias_solo')) {
+            row.push(
+                record.nombresEvidencias || 'Sin evidencias',
+                record.carpetaEvidencias || 'Sin carpeta',
+                record.linksEvidencias || 'Sin links'
+            );
+        } else {
+            if (incluirCampos.includes('intervenciones')) {
+                row.push(
+                    record.intervencionesPsicologicas || '0',
+                    record.ninosNinas || '0',
+                    record.adolescentes || '0',
+                    record.adultos || '0',
+                    record.mayores60 || '0',
+                    record.familia || '0'
+                );
+            }
+            if (incluirCampos.includes('actividades')) {
+                let actividades = record.actividadesRealizadas || '';
+                if (record.actividadesVariasDetalle) actividades += (actividades?' | ':'') + record.actividadesVariasDetalle;
+                if (record.pruebasPsicologicasDetalle) actividades += (actividades?' | ':'') + record.pruebasPsicologicasDetalle;
+                row.push(actividades);
+            }
+            if (incluirCampos.includes('evidencias')) row.push(record.totalEvidencias || '0');
+            if (incluirCampos.includes('comentarios')) row.push(record.comentariosAdicionales || '');
+            if (incluirCampos.includes('permisos')) row.push(record.permisoDetalle || '', record.otroDetalle || '');
+        }
+        
+        return row;
+    });
+}
+
+function parseLinksFromGeneratedText(linksText) {
+    const lines = linksText.split('\n');
+    const linksData = [];
+    lines.forEach(line => {
+        if (line.includes('https://')) {
+            const parts = line.split(': https://');
+            if (parts.length === 2) {
+                linksData.push({
+                    fileName: parts[0].trim(),
+                    url: 'https://' + parts[1].trim()
+                });
+            }
+        }
+    });
+    return linksData;
+}
+
+function getSelectedFields() {
+    const checkboxes = document.querySelectorAll('input[name="incluir_campos[]"]:checked');
+    return Array.from(checkboxes).map(cb => cb.value);
+}
+
+// Continúa con reportes de Horas y Excel en el siguiente archivo...
+// ========== CONTINUACIÓN reports.js - Parte 3 - NUEVOS REPORTES ==========
+
+// ========== REPORTE DE HORAS POR DÍA ==========
+async function handleReporteHoras(e) {
+    e.preventDefault();
+    
+    if (!isAuthenticated || !currentUser || !isAdmin) {
+        showStatus('❌ Solo administradores pueden generar este reporte', 'error');
+        return;
+    }
+    
+    const fechaDesde = document.getElementById('fecha_desde').value;
+    const fechaHasta = document.getElementById('fecha_hasta').value;
+    
+    if (!fechaDesde || !fechaHasta || !validateDates()) return;
+    
+    showStatus('⏳ Generando reporte de horas...', 'loading');
+    
+    try {
+        await fetchAttendanceDataFromFirebase();
+        
+        if (!attendanceData || attendanceData.length === 0) {
+            showStatus('⚠️ Sin registros en este período', 'error');
+            return;
+        }
+        
+        await generatePDFHorasPorDia(fechaDesde, fechaHasta);
+        showDownloadModal(fechaDesde, fechaHasta, 'horas');
+        hideStatus();
+        
+    } catch (error) {
+        console.error('❌ Error generando reporte de horas:', error);
+        showStatus('❌ Error: ' + error.message, 'error');
+    }
+}
+
+async function generatePDFHorasPorDia(fechaDesde, fechaHasta) {
+    const {jsPDF} = window.jspdf;
+    const doc = new jsPDF('l', 'mm', 'a4');
+    doc.setFont('helvetica');
+    
+    // Calcular rango de días a mostrar
+    const rangoFechas = calcularRangoDias(fechaDesde, fechaHasta);
+    const diasMostrar = rangoFechas.dias;
+    
+    // Preparar datos agrupados por usuario y día
+    const datosHoras = prepareHorasPorDia(diasMostrar);
+    
+    // Generar encabezado
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('REPORTE DE HORAS POR DÍA - CESPSIC', 148, 12, {align: 'center'});
+    
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Generado por: ${currentUser.name}`, 10, 20);
+    doc.text(`Período: ${rangoFechas.fechaInicio} al ${rangoFechas.fechaFin}`, 10, 24);
+    doc.text(`Total usuarios: ${datosHoras.length}`, 10, 28);
+    
+    // Preparar headers de tabla
+    const headers = ['Nombre', 'Ap. Paterno', 'Ap. Materno', 'Tipo Est.', 'Modalidad'];
+    diasMostrar.forEach(dia => {
+        headers.push(dia.dia);
+    });
+    headers.push('Total Hrs');
+    
+    // Preparar datos de tabla
+    const tableData = datosHoras.map(usuario => {
+        const row = [
+            usuario.nombre,
+            usuario.apellidoPaterno,
+            usuario.apellidoMaterno,
+            usuario.tipoEstudiante,
+            usuario.modalidad
+        ];
+        
+        diasMostrar.forEach(dia => {
+            const fechaKey = dia.fecha;
+            row.push(usuario.horasPorDia[fechaKey] || '');
+        });
+        
+        row.push(usuario.totalHoras.toFixed(1));
+        
+        return row;
+    });
+    
+    // Estilos de columnas
+    const columnStyles = {};
+    headers.forEach((header, index) => {
+        if (index < 5) {
+            columnStyles[index] = {fontSize: 6};
+        } else {
+            columnStyles[index] = {fontSize: 5, halign: 'center', cellWidth: 8};
+        }
+    });
+    
+    // Generar tabla
+    doc.autoTable({
+        head: [headers],
+        body: tableData,
+        startY: 35,
+        styles: {fontSize: 5, cellPadding: 1, lineColor: [200,200,200], lineWidth: 0.1},
+        headStyles: {fillColor: [102,126,234], textColor: 255, fontStyle: 'bold', fontSize: 5},
+        alternateRowStyles: {fillColor: [248,249,250]},
+        columnStyles: columnStyles,
+        margin: {left: 5, right: 5}
+    });
+    
+    // Footer con leyenda
+    const finalY = doc.lastAutoTable.finalY + 5;
+    doc.setFontSize(7);
+    doc.text('Leyenda: (vacío) = Sin registro | X = Registro incompleto | Números = Horas trabajadas', 10, finalY);
+    
+    addPDFFooter(doc);
+    pdfBlob = doc.output('blob');
+}
+
+function calcularRangoDias(fechaDesde, fechaHasta) {
+    const desde = new Date(fechaDesde);
+    const hasta = new Date(fechaHasta);
+    
+    const diffTime = Math.abs(hasta - desde);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    let fechaInicio, fechaFin;
+    
+    if (diffDays > 31) {
+        // Más de un mes: mostrar solo 1 mes hacia atrás desde fechaHasta
+        fechaFin = new Date(hasta);
+        fechaInicio = new Date(hasta);
+        fechaInicio.setDate(fechaInicio.getDate() - 30);
+    } else {
+        // Menos de un mes: mostrar rango completo
+        fechaInicio = new Date(desde);
+        fechaFin = new Date(hasta);
+    }
+    
+    // Generar array de días
+    const dias = [];
+    const currentDate = new Date(fechaInicio);
+    
+    while (currentDate <= fechaFin) {
+        dias.push({
+            fecha: currentDate.toISOString().split('T')[0],
+            dia: currentDate.getDate().toString().padStart(2, '0')
+        });
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    return {
+        fechaInicio: fechaInicio.toISOString().split('T')[0],
+        fechaFin: fechaFin.toISOString().split('T')[0],
+        dias: dias
+    };
+}
+
+function prepareHorasPorDia(diasMostrar) {
+    // Agrupar registros por usuario
+    const usuariosMap = new Map();
+    
+    attendanceData.forEach(record => {
+        const nombreCompleto = `${record.nombre || ''}_${record.apellidoPaterno || ''}_${record.apellidoMaterno || ''}`;
+        
+        if (!usuariosMap.has(nombreCompleto)) {
+            usuariosMap.set(nombreCompleto, {
+                nombre: record.nombre || '',
+                apellidoPaterno: record.apellidoPaterno || '',
+                apellidoMaterno: record.apellidoMaterno || '',
+                tipoEstudiante: record.tipoEstudiante || '',
+                modalidad: record.modalidad || '',
+                registrosPorDia: {}
+            });
+        }
+        
+        const fecha = record.fecha;
+        if (!usuariosMap.get(nombreCompleto).registrosPorDia[fecha]) {
+            usuariosMap.get(nombreCompleto).registrosPorDia[fecha] = [];
+        }
+        
+        usuariosMap.get(nombreCompleto).registrosPorDia[fecha].push({
+            hora: record.hora,
+            tipoRegistro: record.tipoRegistro
+        });
+    });
+    
+    // Calcular horas por día para cada usuario
+    const datosHoras = [];
+    
+    usuariosMap.forEach(usuario => {
+        const horasPorDia = {};
+        let totalHoras = 0;
+        
+        diasMostrar.forEach(dia => {
+            const fecha = dia.fecha;
+            const registros = usuario.registrosPorDia[fecha] || [];
+            
+            if (registros.length === 0) {
+                horasPorDia[fecha] = '';
+            } else {
+                const horas = calcularHorasDia(registros);
+                horasPorDia[fecha] = horas.display;
+                if (horas.value > 0) {
+                    totalHoras += horas.value;
+                }
+            }
+        });
+        
+        datosHoras.push({
+            nombre: usuario.nombre,
+            apellidoPaterno: usuario.apellidoPaterno,
+            apellidoMaterno: usuario.apellidoMaterno,
+            tipoEstudiante: usuario.tipoEstudiante,
+            modalidad: usuario.modalidad,
+            horasPorDia: horasPorDia,
+            totalHoras: totalHoras
+        });
+    });
+    
+    // Ordenar por nombre
+    datosHoras.sort((a, b) => {
+        const nombreA = `${a.nombre} ${a.apellidoPaterno}`.toLowerCase();
+        const nombreB = `${b.nombre} ${b.apellidoPaterno}`.toLowerCase();
+        return nombreA.localeCompare(nombreB);
+    });
+    
+    return datosHoras;
+}
+
+function calcularHorasDia(registros) {
+    // Separar entradas y salidas
+    const entradas = registros.filter(r => r.tipoRegistro && r.tipoRegistro.toLowerCase() === 'entrada');
+    const salidas = registros.filter(r => r.tipoRegistro && r.tipoRegistro.toLowerCase() === 'salida');
+    
+    if (entradas.length === 0 || salidas.length === 0) {
+        return {display: 'X', value: 0};
+    }
+    
+    // Obtener primera entrada y última salida
+    const horasEntrada = entradas.map(e => convertirHoraAMinutos(e.hora)).filter(h => h !== null);
+    const horasSalida = salidas.map(s => convertirHoraAMinutos(s.hora)).filter(h => h !== null);
+    
+    if (horasEntrada.length === 0 || horasSalida.length === 0) {
+        return {display: 'X', value: 0};
+    }
+    
+    const primeraEntrada = Math.min(...horasEntrada);
+    const ultimaSalida = Math.max(...horasSalida);
+    
+    const minutosTrabajados = ultimaSalida - primeraEntrada;
+    const horas = minutosTrabajados / 60;
+    
+    return {
+        display: horas.toFixed(1),
+        value: horas
+    };
+}
+
+function convertirHoraAMinutos(horaStr) {
+    if (!horaStr) return null;
+    
+    try {
+        const parts = horaStr.split(':');
+        if (parts.length >= 2) {
+            const horas = parseInt(parts[0]);
+            const minutos = parseInt(parts[1]);
+            return horas * 60 + minutos;
+        }
+    } catch (e) {
+        console.warn('Error convirtiendo hora:', horaStr);
+    }
+    
+    return null;
+}
+
+// ========== EXPORTACIÓN A EXCEL ==========
+async function handleExportExcel(e) {
+    e.preventDefault();
+    
+    if (!isAuthenticated || !currentUser || !isAdmin) {
+        showStatus('❌ Solo administradores pueden exportar a Excel', 'error');
+        return;
+    }
+    
+    const fechaDesde = document.getElementById('fecha_desde').value;
+    const fechaHasta = document.getElementById('fecha_hasta').value;
+    
+    if (!fechaDesde || !fechaHasta || !validateDates()) return;
+    
+    showStatus('⏳ Exportando a Excel...', 'loading');
+    
+    try {
+        await fetchAttendanceDataFromFirebase();
+        
+        if (!attendanceData || attendanceData.length === 0) {
+            showStatus('⚠️ Sin registros para exportar', 'error');
+            return;
+        }
+        
+        await generateExcelExport(fechaDesde, fechaHasta);
+        showDownloadModal(fechaDesde, fechaHasta, 'excel');
+        hideStatus();
+        
+    } catch (error) {
+        console.error('❌ Error exportando a Excel:', error);
+        showStatus('❌ Error: ' + error.message, 'error');
+    }
+}
+
+async function generateExcelExport(fechaDesde, fechaHasta) {
+    // Verificar librería XLSX
+    const XLSX = window.XLSX;
+    if (!XLSX) {
+        throw new Error('Librería XLSX no cargada. Verifica que esté incluida en index.html');
+    }
+    
+    console.log('📊 Generando Excel...');
+    console.log('Registros a exportar:', attendanceData.length);
+    
+    // Preparar datos
+    const excelData = prepareExcelData();
+    
+    if (excelData.length === 0) {
+        throw new Error('No hay datos para exportar');
+    }
+    
+    console.log('✅ Datos preparados para Excel:', excelData.length, 'filas');
+    
+    // Crear workbook y worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(excelData);
+    
+    // Ajustar ancho de columnas
+    const headerNames = Object.keys(excelData[0]);
+    const columnWidths = headerNames.map(header => {
+        return { wch: Math.max(header.length + 2, 15) };
+    });
+    ws['!cols'] = columnWidths;
+    
+    // Agregar worksheet al workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Asistencias');
+    
+    console.log('✅ Workbook creado');
+    
+    // Generar archivo Excel
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    pdfBlob = new Blob([wbout], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+    });
+    
+    console.log('✅ Archivo Excel generado, tamaño:', pdfBlob.size, 'bytes');
+}
+
+function prepareExcelData() {
+    console.log('📊 Preparando datos para Excel...');
+    console.log('Total registros:', attendanceData.length);
+    
+    if (attendanceData.length > 0) {
+        console.log('🔍 Ejemplo primer registro:', attendanceData[0]);
+    }
+    
+    return attendanceData.map((record, index) => {
+        const excelRow = {};
+        
+        // Orden de los 43 campos según EXCEL_FIELD_ORDER
+        const fieldOrder = [
+            'timestamp',
+            'email',
+            'googleUserId',
+            'nombreAutenticado',
+            'timestampAutenticacion',
+            'latitud',
+            'longitud',
+            'estadoUbicacion',
+            'ubicacionDetectada',
+            'direccionCompleta',
+            'precisionGPS',
+            'precisionGPSMetros',
+            'validacionUbicacion',
+            'nombre',
+            'apellidoPaterno',
+            'apellidoMaterno',
+            'tipoEstudiante',
+            'modalidad',
+            'fecha',
+            'hora',
+            'tipoRegistro',
+            'permisoDetalle',
+            'otroDetalle',
+            'intervencionesPsicologicas',
+            'ninosNinas',
+            'adolescentes',
+            'adultos',
+            'mayores60',
+            'familia',
+            'actividadesRealizadas',
+            'actividadesVariasDetalle',
+            'pruebasPsicologicasDetalle',
+            'comentariosAdicionales',
+            'totalEvidencias',
+            'nombresEvidencias',
+            'carpetaEvidencias',
+            'tipoDispositivo',
+            'esDesktop',
+            'metodoGPS',
+            'precisionRequerida',
+            'infoDispositivoJSON',
+            'versionHTML',
+            'registroId'
+        ];
+        
+        // Mapeo de nombres de campos a headers en español
+        const headerNames = {
+            'timestamp': 'Timestamp',
+            'email': 'Email',
+            'googleUserId': 'Google_User_ID',
+            'nombreAutenticado': 'Nombre_Autenticado',
+            'timestampAutenticacion': 'Timestamp_Autenticacion',
+            'latitud': 'Latitud',
+            'longitud': 'Longitud',
+            'estadoUbicacion': 'Estado_Ubicacion',
+            'ubicacionDetectada': 'Ubicacion_Detectada',
+            'direccionCompleta': 'Direccion_Completa',
+            'precisionGPS': 'Precision_GPS',
+            'precisionGPSMetros': 'Precision_GPS_Metros',
+            'validacionUbicacion': 'Validacion_Ubicacion',
+            'nombre': 'Nombre',
+            'apellidoPaterno': 'Apellido_Paterno',
+            'apellidoMaterno': 'Apellido_Materno',
+            'tipoEstudiante': 'Tipo_Estudiante',
+            'modalidad': 'Modalidad',
+            'fecha': 'Fecha',
+            'hora': 'Hora',
+            'tipoRegistro': 'Tipo_Registro',
+            'permisoDetalle': 'Permiso_Detalle',
+            'otroDetalle': 'Otro_Detalle',
+            'intervencionesPsicologicas': 'Intervenciones_Psicologicas',
+            'ninosNinas': 'Ninos_Ninas',
+            'adolescentes': 'Adolescentes',
+            'adultos': 'Adultos',
+            'mayores60': 'Mayores_60',
+            'familia': 'Familia',
+            'actividadesRealizadas': 'Actividades_Realizadas',
+            'actividadesVariasDetalle': 'Actividades_Varias_Detalle',
+            'pruebasPsicologicasDetalle': 'Pruebas_Psicologicas_Detalle',
+            'comentariosAdicionales': 'Comentarios_Adicionales',
+            'totalEvidencias': 'Total_Evidencias',
+            'nombresEvidencias': 'Nombres_Evidencias',
+            'carpetaEvidencias': 'Carpeta_Evidencias',
+            'tipoDispositivo': 'Tipo_Dispositivo',
+            'esDesktop': 'Es_Desktop',
+            'metodoGPS': 'Metodo_GPS',
+            'precisionRequerida': 'Precision_Requerida',
+            'infoDispositivoJSON': 'Info_Dispositivo_JSON',
+            'versionHTML': 'Version_HTML',
+            'registroId': 'Registro_ID'
+        };
+        
+        fieldOrder.forEach(fieldKey => {
+            const headerName = headerNames[fieldKey];
+            let value = record[fieldKey];
+            
+            // Manejar valores especiales
+            if (value === null || value === undefined) {
+                value = '';
+            } else if (typeof value === 'object' && !(value instanceof Date)) {
+                value = JSON.stringify(value);
+            } else if (typeof value === 'boolean') {
+                value = value ? 'Sí' : 'No';
+            } else if (value instanceof Date) {
+                value = value.toISOString();
+            }
+            
+            excelRow[headerName] = value;
+        });
+        
+        // Debug del primer registro
+        if (index === 0) {
+            console.log('🔍 Primera fila Excel:', excelRow);
+        }
+        
+        return excelRow;
+    });
+}
+
+// ========== FUNCIONES DE DESCARGA Y MODAL ==========
+function generateFileName(fechaDesde, fechaHasta, tipoReporte) {
+    const fecha = new Date().toISOString().split('T')[0];
+    const filtros = [];
+    
+    if (tipoReporte === 'asistencias') {
+        // Determinar filtros aplicados
+        if (isAdmin) {
+            const userFilter = document.getElementById('filtro_usuario')?.value;
+            if (userFilter) {
+                filtros.push(userFilter.replace(/\s+/g, ''));
+            } else {
+                filtros.push('TodosUsuarios');
+            }
+        } else {
+            filtros.push(currentUser.name.replace(/\s+/g, ''));
+        }
+        
+        const tipoFilter = document.getElementById('filtro_tipo')?.value;
+        if (tipoFilter) {
+            filtros.push(tipoFilter);
+        }
+        
+        const modalidadFilter = document.getElementById('filtro_modalidad')?.value;
+        if (modalidadFilter) {
+            filtros.push(modalidadFilter);
+        }
+        
+        return `Asistencias_${filtros.join('_')}_${fechaDesde}_${fechaHasta}.pdf`;
+        
+    } else if (tipoReporte === 'horas') {
+        return `HorasPorDia_${fechaDesde}_${fechaHasta}_${fecha}.pdf`;
+        
+    } else if (tipoReporte === 'excel') {
+        const userFilter = document.getElementById('filtro_usuario')?.value;
+        const suffix = userFilter ? userFilter.replace(/\s+/g, '') : 'TodosUsuarios';
+        return `ExportCompleto_${suffix}_${fechaDesde}_${fechaHasta}_${fecha}.xlsx`;
+    }
+    
+    return `Reporte_CESPSIC_${fecha}.pdf`;
+}
+
+function showDownloadModal(fechaDesde, fechaHasta, tipoReporte) {
+    const modal = document.getElementById('modal-overlay');
+    const reportInfo = document.getElementById('report-info');
+    
+    let tipoReporteTexto = 'Asistencias';
+    if (tipoReporte === 'horas') tipoReporteTexto = 'Horas por Día';
+    if (tipoReporte === 'excel') tipoReporteTexto = 'Exportación Completa Excel';
+    
+    reportInfo.innerHTML = `
+        <h4>📊 ${tipoReporteTexto}</h4>
+        <p><strong>Período:</strong> ${fechaDesde} al ${fechaHasta}</p>
+        <p><strong>Total de registros:</strong> ${attendanceData.length}</p>
+        <p><strong>Generado por:</strong> ${currentUser.name}</p>
+        <p><strong>Fecha:</strong> ${new Date().toLocaleString('es-MX')}</p>
+    `;
+    
+    document.getElementById('download-btn').onclick = () => downloadFile(fechaDesde, fechaHasta, tipoReporte);
+    modal.classList.add('show');
+}
+
+function closeModal() {
+    document.getElementById('modal-overlay').classList.remove('show');
+}
+
+function downloadFile(fechaDesde, fechaHasta, tipoReporte) {
+    if (pdfBlob) {
+        const url = URL.createObjectURL(pdfBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = generateFileName(fechaDesde, fechaHasta, tipoReporte);
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        showStatus('✅ Archivo descargado', 'success');
+        setTimeout(() => {
+            hideStatus();
+            closeModal();
+        }, 2000);
+    }
+}
+
+// ========== FUNCIONES UI AUXILIARES ==========
 function updateAuthenticationUI() {
     const authSection = document.getElementById('auth-section');
     const authTitle = document.getElementById('auth-title');
     const userInfo = document.getElementById('user-info');
     const signinContainer = document.getElementById('signin-button-container');
+    
     if (isAuthenticated && currentUser) {
         authSection.classList.add('authenticated');
         authTitle.textContent = `✅ Autorizado ${isAdmin?'(Admin)':''}`;
         authTitle.classList.add('authenticated');
+        
         document.getElementById('user-avatar').src = currentUser.picture;
         document.getElementById('user-email').textContent = currentUser.email;
         document.getElementById('user-name').textContent = currentUser.name;
         document.getElementById('user-status').textContent = isAdmin ? '👑 Administrador' : '✅ Usuario';
+        
         userInfo.classList.add('show');
         signinContainer.style.display = 'none';
     } else {
@@ -446,7 +1455,17 @@ function updateSubmitButton() {
 }
 
 function showAuthenticationError(message) {
-    document.getElementById("signin-button-container").innerHTML = `<div style="background:#f8d7da;border:1px solid #f5c6cb;border-radius:8px;padding:15px;color:#721c24;"><strong>❌ Error</strong><br>${message}<div style="margin-top:15px;"><button onclick="location.reload()" style="background:#dc3545;color:white;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;">🔄 Recargar</button></div></div>`;
+    const container = document.getElementById("signin-button-container");
+    container.innerHTML = `
+        <div style="background:#f8d7da;border:1px solid #f5c6cb;border-radius:8px;padding:15px;color:#721c24;">
+            <strong>❌ Error</strong><br>${message}
+            <div style="margin-top:15px;">
+                <button onclick="location.reload()" style="background:#dc3545;color:white;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;">
+                    🔄 Recargar
+                </button>
+            </div>
+        </div>
+    `;
 }
 
 function signOut() {
@@ -454,12 +1473,13 @@ function signOut() {
         if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
             google.accounts.id.disableAutoSelect();
         }
+        
         isAuthenticated = false;
         currentUser = null;
         attendanceData = [];
         pdfBlob = null;
-        authenticationAttempts = 0;
         isAdmin = false;
+        
         updateAuthenticationUI();
         disableForm();
         closeModal();
@@ -470,17 +1490,19 @@ function signOut() {
         const evidenciasCheckbox = document.querySelector('.checkbox-evidencias');
         if (evidenciasCheckbox) evidenciasCheckbox.style.display = 'none';
         
-        // NUEVO: Ocultar sección de asistencias
         const attendanceSection = document.getElementById('attendance-view-section');
         if (attendanceSection) attendanceSection.style.display = 'none';
         
-        showStatus('Sesión cerrada', 'success');
+        const reportTypeSection = document.getElementById('report-type-section');
+        if (reportTypeSection) reportTypeSection.style.display = 'none';
+        
+        showStatus('✅ Sesión cerrada', 'success');
         setTimeout(() => {
             hideStatus();
             setTimeout(() => initializeGoogleSignIn(), 1000);
         }, 2000);
     } catch (error) {
-        showStatus('Error cerrando', 'error');
+        showStatus('❌ Error cerrando sesión', 'error');
     }
 }
 
@@ -500,8 +1522,6 @@ function setMaxDate() {
     document.getElementById('fecha_hasta').max = today;
     document.getElementById('fecha_hasta').value = today;
     
-    // CAMBIO: Para usuarios regulares, el rango por defecto es solo el día de hoy
-    // Para administradores, mantener el mes anterior
     if (!isAdmin) {
         document.getElementById('fecha_desde').value = today;
     } else {
@@ -509,581 +1529,5 @@ function setMaxDate() {
         const oneMonthAgo = new Date(todayDate);
         oneMonthAgo.setMonth(todayDate.getMonth() - 1);
         document.getElementById('fecha_desde').value = oneMonthAgo.toISOString().split('T')[0];
-    }
-}
-
-// Nueva función para mostrar asistencias en pantalla (solo usuarios regulares)
-function displayAttendanceOnScreen() {
-    console.log('=== DISPLAY ATTENDANCE ===');
-    console.log('isAdmin:', isAdmin);
-    console.log('attendanceData:', attendanceData);
-    
-    if (isAdmin) {
-        console.log('❌ Es admin, no se muestra tabla');
-        return; // Los administradores no necesitan esta vista
-    }
-    
-    const attendanceSection = document.getElementById('attendance-view-section');
-    const attendanceSummary = document.getElementById('attendance-summary');
-    const attendanceList = document.getElementById('attendance-list');
-    
-    if (!attendanceSection) {
-        console.error('❌ No se encontró attendance-view-section');
-        return;
-    }
-    
-    if (!attendanceData || attendanceData.length === 0) {
-        console.log('⚠️ Sin datos de asistencia');
-        attendanceSection.style.display = 'block';
-        attendanceSummary.innerHTML = '📊 Sin asistencias en este período';
-        attendanceList.innerHTML = `
-            <div class="no-attendance-message">
-                <div class="icon">📭</div>
-                <p>No hay registros de asistencia para el período seleccionado.</p>
-            </div>
-        `;
-        return;
-    }
-    
-    console.log('✅ Mostrando', attendanceData.length, 'registros');
-    attendanceSection.style.display = 'block';
-    attendanceSummary.innerHTML = `📊 Total de asistencias: <strong>${attendanceData.length}</strong>`;
-    
-    // Crear tabla
-    let tableHTML = `
-        <table class="attendance-table">
-            <thead>
-                <tr>
-                    <th>Fecha</th>
-                    <th>Hora</th>
-                    <th>Tipo de Registro</th>
-                    <th>Nombre</th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
-    
-    attendanceData.forEach(record => {
-        const nombreCompleto = normalizeNameCapitalization(
-            `${record.nombre} ${record.apellido_paterno} ${record.apellido_materno}`.trim()
-        );
-        const fecha = record.fecha || '-';
-        const hora = record.hora || '-';
-        const tipoRegistro = record.tipo_registro || '-';
-        
-        // Determinar clase CSS según tipo de registro
-        let registroClass = 'registro-otro';
-        if (tipoRegistro.toLowerCase() === 'entrada') {
-            registroClass = 'registro-entrada';
-        } else if (tipoRegistro.toLowerCase() === 'salida') {
-            registroClass = 'registro-salida';
-        } else if (tipoRegistro.toLowerCase() === 'permiso') {
-            registroClass = 'registro-permiso';
-        }
-        
-        tableHTML += `
-            <tr>
-                <td>${fecha}</td>
-                <td>${hora}</td>
-                <td><span class="${registroClass}">${tipoRegistro}</span></td>
-                <td>${nombreCompleto}</td>
-            </tr>
-        `;
-    });
-    
-    tableHTML += `
-            </tbody>
-        </table>
-    `;
-    
-    attendanceList.innerHTML = tableHTML;
-    console.log('✅ Tabla generada y mostrada');
-}
-
-function setupEventListeners() {
-    const fechaDesde = document.getElementById('fecha_desde');
-    const fechaHasta = document.getElementById('fecha_hasta');
-    
-    // Evento para cambio de fechas
-    fechaDesde.addEventListener('change', function() {
-        validateDates();
-        if (!isAdmin) {
-            loadAndDisplayAttendance();
-        }
-    });
-    
-    fechaHasta.addEventListener('change', function() {
-        validateDates();
-        if (!isAdmin) {
-            loadAndDisplayAttendance();
-        }
-    });
-    
-    document.getElementById('reportForm').addEventListener('submit', handleFormSubmit);
-    setupCheckboxListeners();
-}
-
-function setupCheckboxListeners() {
-    ['incluir_intervenciones','incluir_actividades','incluir_evidencias','incluir_comentarios','incluir_permisos'].forEach(id => {
-        const checkbox = document.getElementById(id);
-        if (checkbox) {
-            checkbox.addEventListener('change', function() {
-                if (this.checked) {
-                    const evidenciasSolo = document.getElementById('incluir_evidencias_solo');
-                    if (evidenciasSolo && evidenciasSolo.checked) {
-                        evidenciasSolo.checked = false;
-                        updateCheckboxStyles();
-                    }
-                }
-            });
-        }
-    });
-}
-
-function handleEvidenciasChange(checkbox) {
-    if (checkbox.checked) {
-        ['incluir_intervenciones','incluir_actividades','incluir_evidencias','incluir_comentarios','incluir_permisos'].forEach(id => {
-            const cb = document.getElementById(id);
-            if (cb) cb.checked = false;
-        });
-        showStatus('Modo "Solo Evidencias" activado', 'loading');
-        setTimeout(() => hideStatus(), 6000);
-    }
-    updateCheckboxStyles();
-}
-
-window.handleEvidenciasChange = handleEvidenciasChange;
-
-function updateCheckboxStyles() {
-    const evidenciasSolo = document.getElementById('incluir_evidencias_solo');
-    const evidenciasItem = document.querySelector('.checkbox-evidencias');
-    if (evidenciasSolo && evidenciasSolo.checked && evidenciasItem) {
-        evidenciasItem.style.background = '#e8f5e8';
-        evidenciasItem.style.borderColor = '#4caf50';
-        evidenciasItem.style.boxShadow = '0 2px 8px rgba(76,175,80,0.2)';
-    } else if (evidenciasItem) {
-        evidenciasItem.style.background = '';
-        evidenciasItem.style.borderColor = '';
-        evidenciasItem.style.boxShadow = '';
-    }
-}
-
-function validateDates() {
-    const fechaDesde = document.getElementById('fecha_desde').value;
-    const fechaHasta = document.getElementById('fecha_hasta').value;
-    const today = new Date().toISOString().split('T')[0];
-    if (fechaHasta > today) {
-        showStatus('Fecha futura no válida', 'error');
-        document.getElementById('fecha_hasta').value = today;
-        return false;
-    }
-    if (fechaDesde && fechaHasta && fechaDesde > fechaHasta) {
-        showStatus('Rango de fechas inválido', 'error');
-        document.getElementById('fecha_desde').value = fechaHasta;
-        return false;
-    }
-    hideStatus();
-    return true;
-}
-
-// MODIFICADO: Lógica de generación de reporte
-async function handleFormSubmit(e) {
-    e.preventDefault();
-    if (!isAuthenticated || !currentUser) {
-        showStatus('Debe autenticarse', 'error');
-        return;
-    }
-    const fechaDesde = document.getElementById('fecha_desde').value;
-    const fechaHasta = document.getElementById('fecha_hasta').value;
-    if (!fechaDesde || !fechaHasta || !validateDates()) return;
-    
-    const checkboxes = document.querySelectorAll('input[name="incluir_campos[]"]:checked');
-    if (checkboxes.length === 0) {
-        showStatus('Seleccione campos', 'error');
-        return;
-    }
-    
-    // Determinar filtro de usuario según rol
-    let filtroUsuario = '';
-    if (isAdmin) {
-        filtroUsuario = document.getElementById('filtro_usuario')?.value || '';
-        console.log('Admin - Filtro usuario:', filtroUsuario || 'Todos');
-    } else {
-        filtroUsuario = '';
-        console.log('Usuario regular - Backend filtrará por email automáticamente');
-    }
-    
-    const ordenamiento = isAdmin ? document.getElementById('orden_datos')?.value : 'nombre';
-    const incluirCampos = getSelectedFields();
-    const isModoEvidencias = incluirCampos.includes('evidencias_solo');
-    
-    showStatus('Conectando (90s max)...', 'loading');
-    const submitBtn = document.getElementById('submit_btn');
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Conectando...';
-    
-    try {
-        await fetchAttendanceData(fechaDesde, fechaHasta, filtroUsuario, ordenamiento);
-        
-        if (!attendanceData || attendanceData.length === 0) {
-            showStatus(isModoEvidencias ? 'Sin SALIDAS con evidencias' : 'Sin registros en este período', 'error');
-            updateSubmitButton();
-            
-            // NUEVO: Mostrar vista vacía para usuarios regulares
-            if (!isAdmin) {
-                console.log('🔍 Llamando displayAttendanceOnScreen (sin datos)');
-                displayAttendanceOnScreen();
-            }
-            return;
-        }
-        
-        // NUEVO: Mostrar asistencias en pantalla para usuarios regulares
-        if (!isAdmin) {
-            console.log('🔍 Llamando displayAttendanceOnScreen (con datos)');
-            displayAttendanceOnScreen();
-        }
-        
-        showStatus(`Generando PDF (${attendanceData.length})...`, 'loading');
-        submitBtn.textContent = 'Generando PDF...';
-        await generatePDF(fechaDesde, fechaHasta, ordenamiento);
-        showDownloadModal(fechaDesde, fechaHasta);
-        hideStatus();
-        updateSubmitButton();
-    } catch (error) {
-        console.error('Error:', error);
-        let errorMsg = 'Error: ';
-        if (error.message.includes('intentos')) {
-            errorMsg += 'Sin respuesta tras reintentos.\n• Verifique conexión\n• Intente rango menor\n• Espere 1-2 min';
-        } else if (error.message.includes('Timeout')) {
-            errorMsg += 'Timeout. Intente rango menor.';
-        } else {
-            errorMsg += error.message;
-        }
-        showStatus(errorMsg, 'error');
-        updateSubmitButton();
-    }
-}
-
-async function fetchAttendanceData(fechaDesde, fechaHasta, filtroUsuario = '', ordenamiento = 'nombre') {
-    try {
-        const incluirCampos = getSelectedFields();
-        const isModoEvidencias = incluirCampos.includes('evidencias_solo');
-        const result = await makeBackendRequestWithRetry('get_attendance_data', {
-            fechaDesde,fechaHasta,
-            filtroTipo:document.getElementById('filtro_tipo').value,
-            filtroModalidad:document.getElementById('filtro_modalidad').value,
-            filtroTipoRegistro:isModoEvidencias?'salida':'',
-            filtroUsuario,ordenamiento,modoEvidencias:isModoEvidencias
-        });
-        if (result.success && result.data) {
-            attendanceData = result.data;
-            if (isModoEvidencias) {
-                attendanceData = attendanceData.filter(r => r.tipo_registro && r.tipo_registro.toLowerCase() === 'salida');
-            }
-            if (ordenamiento) {
-                attendanceData = sortAttendanceData(attendanceData, ordenamiento);
-            }
-        } else {
-            throw new Error(result.message || 'Error servidor');
-        }
-    } catch (error) {
-        attendanceData = [];
-        throw new Error('Conexión: ' + error.message);
-    }
-}
-
-// ... (resto de funciones sin cambios: sortAttendanceData, generatePDF, etc.)
-
-function sortAttendanceData(data, ordenamiento) {
-    const sorted = [...data];
-    const getNombre = (r) => `${r.nombre} ${r.apellido_paterno} ${r.apellido_materno}`.trim().toLowerCase();
-    const comparators = {
-        nombre: (a,b) => getNombre(a).localeCompare(getNombre(b)) || a.fecha.localeCompare(b.fecha),
-        fecha: (a,b) => a.fecha.localeCompare(b.fecha) || getNombre(a).localeCompare(getNombre(b)),
-        tipo_estudiante: (a,b) => (a.tipo_estudiante||'').localeCompare(b.tipo_estudiante||'') || a.fecha.localeCompare(b.fecha),
-        modalidad: (a,b) => (a.modalidad||'').localeCompare(b.modalidad||'') || a.fecha.localeCompare(b.fecha),
-        tipo_registro: (a,b) => (a.tipo_registro||'').localeCompare(b.tipo_registro||'') || a.fecha.localeCompare(b.fecha)
-    };
-    sorted.sort(comparators[ordenamiento] || comparators.nombre);
-    return sorted;
-}
-
-async function generatePDF(fechaDesde, fechaHasta, ordenamiento = 'nombre') {
-    const {jsPDF} = window.jspdf;
-    const doc = new jsPDF('l', 'mm', 'a4');
-    doc.setFont('helvetica');
-    addPDFHeader(doc, fechaDesde, fechaHasta, ordenamiento);
-    const tableData = prepareTableData(ordenamiento);
-    const incluirCampos = getSelectedFields();
-    const isModoEvidencias = incluirCampos.includes('evidencias_solo');
-    
-    if (isModoEvidencias) {
-        const headers = getTableHeaders(ordenamiento);
-        const processedData = tableData.map(row => {
-            const newRow = [...row];
-            const linksIndex = headers.indexOf('Links');
-            if (linksIndex !== -1) {
-                newRow[linksIndex] = (row[linksIndex] && row[linksIndex].includes('https://')) ? row[linksIndex] : 'Sin links';
-            }
-            return newRow;
-        });
-        
-        const columnStyles = {};
-        headers.forEach((header, index) => {
-            if (header === 'Links') {
-                columnStyles[index] = {cellWidth: 50, fontSize: 5, textColor: [0,0,255]};
-            } else if (header === 'Nombres Evid.') {
-                columnStyles[index] = {cellWidth: 35, fontSize: 5};
-            } else if (header === 'Carpeta') {
-                columnStyles[index] = {cellWidth: 30, fontSize: 5};
-            } else {
-                columnStyles[index] = {fontSize: 6};
-            }
-        });
-        
-        doc.autoTable({
-            head:[headers],body:processedData,startY:40,
-            styles:{fontSize:6,cellPadding:1.5,lineColor:[200,200,200],lineWidth:0.1},
-            headStyles:{fillColor:[102,126,234],textColor:255,fontStyle:'bold',fontSize:6},
-            alternateRowStyles:{fillColor:[248,249,250]},
-            columnStyles:columnStyles,
-            didDrawCell:function(data) {
-                const linksIndex = headers.indexOf('Links');
-                if (data.column.index === linksIndex && data.section === 'body') {
-                    const cellContent = processedData[data.row.index][linksIndex];
-                    if (cellContent && cellContent.includes('https://')) {
-                        const linksData = parseLinksFromGeneratedText(cellContent);
-                        linksData.forEach((linkData, index) => {
-                            if (linkData.url) {
-                                const linkY = data.cell.y + (index * 2.5) + 2;
-                                doc.link(data.cell.x + 1, linkY - 1, data.cell.width - 2, 2.5, {url:linkData.url});
-                            }
-                        });
-                    }
-                }
-            }
-        });
-    } else {
-        const headers = getTableHeaders(ordenamiento);
-        const columnStyles = {};
-        headers.forEach((header, index) => {
-            if (['Interv.', 'Niños', 'Adoles.', 'Adult.', 'May.60', 'Fam.', 'Tot.Ev.'].includes(header)) {
-                columnStyles[index] = {cellWidth: 12, fontSize: 6, halign: 'center'};
-            } else if (header === 'Actividades') {
-                columnStyles[index] = {cellWidth: 40, fontSize: 5};
-            } else if (header === 'Comentarios') {
-                columnStyles[index] = {cellWidth: 35, fontSize: 5};
-            } else {
-                columnStyles[index] = {fontSize: 6};
-            }
-        });
-        
-        doc.autoTable({
-            head:[headers],body:tableData,startY:40,
-            styles:{fontSize:6,cellPadding:1.5,lineColor:[200,200,200],lineWidth:0.1},
-            headStyles:{fillColor:[102,126,234],textColor:255,fontStyle:'bold',fontSize:6},
-            alternateRowStyles:{fillColor:[248,249,250]},
-            columnStyles:columnStyles
-        });
-    }
-    addPDFFooter(doc);
-    pdfBlob = doc.output('blob');
-}
-
-function addPDFHeader(doc, fechaDesde, fechaHasta, ordenamiento) {
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('REPORTE DE ASISTENCIAS - CESPSIC', 148, 12, {align:'center'});
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Generado por: ${currentUser.name}`, 10, 20);
-    doc.text(`Email: ${currentUser.email}`, 10, 24);
-    doc.text(`Fecha: ${new Date().toLocaleString('es-MX')}`, 10, 28);
-    doc.text(`Período: ${fechaDesde} al ${fechaHasta}`, 10, 32);
-    doc.text(`Total registros: ${attendanceData.length}`, 10, 36);
-    
-    if (ordenamiento) {
-        const ordenTexto = {
-            'nombre': 'Nombre',
-            'fecha': 'Fecha',
-            'tipo_estudiante': 'Tipo Estudiante',
-            'modalidad': 'Modalidad',
-            'tipo_registro': 'Tipo Registro'
-        };
-        doc.text(`Ordenado por: ${ordenTexto[ordenamiento] || ordenamiento}`, 200, 36);
-    }
-}
-
-function addPDFFooter(doc) {
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFontSize(7);
-        doc.text(`Página ${i} de ${pageCount} - CESPSIC`, 148, 205, {align:'center'});
-    }
-}
-
-function getTableHeaders(ordenamiento = 'nombre') {
-    const incluirCampos = getSelectedFields();
-    let headers = [];
-    
-    const baseHeaders = {
-        'nombre': ['Nombre Completo', 'Tipo Est.', 'Modalidad', 'Fecha', 'Hora', 'Tipo Reg.'],
-        'fecha': ['Fecha', 'Nombre Completo', 'Hora', 'Tipo Est.', 'Modalidad', 'Tipo Reg.'],
-        'tipo_estudiante': ['Tipo Est.', 'Fecha', 'Hora', 'Modalidad', 'Nombre Completo', 'Tipo Reg.'],
-        'modalidad': ['Modalidad', 'Tipo Est.', 'Fecha', 'Hora', 'Nombre Completo', 'Tipo Reg.'],
-        'tipo_registro': ['Tipo Reg.', 'Fecha', 'Hora', 'Tipo Est.', 'Modalidad', 'Nombre Completo']
-    };
-    
-    headers = baseHeaders[ordenamiento] || baseHeaders['nombre'];
-    
-    if (incluirCampos.includes('evidencias_solo')) {
-        headers.push('Nombres Evid.', 'Carpeta', 'Links');
-    } else {
-        if (incluirCampos.includes('intervenciones')) {
-            headers.push('Interv.', 'Niños', 'Adoles.', 'Adult.', 'May.60', 'Fam.');
-        }
-        if (incluirCampos.includes('actividades')) headers.push('Actividades');
-        if (incluirCampos.includes('evidencias')) headers.push('Tot.Ev.');
-        if (incluirCampos.includes('comentarios')) headers.push('Comentarios');
-        if (incluirCampos.includes('permisos')) headers.push('Det.Permiso', 'Det.Otro');
-    }
-    return headers;
-}
-
-function prepareTableData(ordenamiento = 'nombre') {
-    const incluirCampos = getSelectedFields();
-    
-    return attendanceData.map(record => {
-        const nombreCompleto = normalizeNameCapitalization(
-            `${record.nombre} ${record.apellido_paterno} ${record.apellido_materno}`.trim()
-        );
-        const tipoEst = record.tipo_estudiante || '';
-        const modalidad = record.modalidad || '';
-        const fecha = record.fecha || '';
-        const hora = record.hora || '';
-        const tipoReg = record.tipo_registro || '';
-        
-        let row = [];
-        
-        switch(ordenamiento) {
-            case 'fecha':
-                row = [fecha, nombreCompleto, hora, tipoEst, modalidad, tipoReg];
-                break;
-            case 'tipo_estudiante':
-                row = [tipoEst, fecha, hora, modalidad, nombreCompleto, tipoReg];
-                break;
-            case 'modalidad':
-                row = [modalidad, tipoEst, fecha, hora, nombreCompleto, tipoReg];
-                break;
-            case 'tipo_registro':
-                row = [tipoReg, fecha, hora, tipoEst, modalidad, nombreCompleto];
-                break;
-            default:
-                row = [nombreCompleto, tipoEst, modalidad, fecha, hora, tipoReg];
-        }
-        
-        if (incluirCampos.includes('evidencias_solo')) {
-            row.push(
-                record.nombres_evidencias || 'Sin evidencias',
-                record.carpeta_evidencias || 'Sin carpeta',
-                record.links_evidencias || 'Sin links'
-            );
-        } else {
-            if (incluirCampos.includes('intervenciones')) {
-                row.push(
-                    record.intervenciones_psicologicas || '0',
-                    record.ninos_ninas || '0',
-                    record.adolescentes || '0',
-                    record.adultos || '0',
-                    record.mayores_60 || '0',
-                    record.familia || '0'
-                );
-            }
-            if (incluirCampos.includes('actividades')) {
-                let actividades = record.actividades_realizadas || '';
-                if (record.actividades_varias_detalle) actividades += (actividades?' | ':'') + record.actividades_varias_detalle;
-                if (record.pruebas_psicologicas_detalle) actividades += (actividades?' | ':'') + record.pruebas_psicologicas_detalle;
-                row.push(actividades);
-            }
-            if (incluirCampos.includes('evidencias')) row.push(record.total_evidencias || '0');
-            if (incluirCampos.includes('comentarios')) row.push(record.comentarios_adicionales || '');
-            if (incluirCampos.includes('permisos')) row.push(record.permiso_detalle || '', record.otro_detalle || '');
-        }
-        return row;
-    });
-}
-
-function parseLinksFromGeneratedText(linksText) {
-    const lines = linksText.split('\n');
-    const linksData = [];
-    lines.forEach(line => {
-        if (line.includes('https://')) {
-            const parts = line.split(': https://');
-            if (parts.length === 2) {
-                linksData.push({fileName:parts[0].trim(),url:'https://' + parts[1].trim()});
-            }
-        }
-    });
-    return linksData;
-}
-
-function getSelectedFields() {
-    const checkboxes = document.querySelectorAll('input[name="incluir_campos[]"]:checked');
-    return Array.from(checkboxes).map(cb => cb.value);
-}
-
-function showDownloadModal(fechaDesde, fechaHasta) {
-    const modal = document.getElementById('modal-overlay');
-    const reportInfo = document.getElementById('report-info');
-    const incluirCampos = getSelectedFields();
-    const filtroTipo = document.getElementById('filtro_tipo').value;
-    const filtroModalidad = document.getElementById('filtro_modalidad').value;
-    const filtroUsuario = isAdmin ? document.getElementById('filtro_usuario')?.value : '';
-    const ordenamiento = isAdmin ? document.getElementById('orden_datos')?.value : 'nombre';
-    
-    const ordenTexto = {
-        'nombre': 'Nombre',
-        'fecha': 'Fecha',
-        'tipo_estudiante': 'Tipo Estudiante',
-        'modalidad': 'Modalidad',
-        'tipo_registro': 'Tipo Registro'
-    };
-    
-    reportInfo.innerHTML = `
-        <h4>📊 Resumen del Reporte</h4>
-        <p><strong>Período:</strong> ${fechaDesde} al ${fechaHasta}</p>
-        <p><strong>Total de registros:</strong> ${attendanceData.length}</p>
-        <p><strong>Campos incluidos:</strong> ${incluirCampos.join(', ')}</p>
-        ${filtroTipo ? `<p><strong>Filtro tipo:</strong> ${filtroTipo}</p>` : ''}
-        ${filtroModalidad ? `<p><strong>Filtro modalidad:</strong> ${filtroModalidad}</p>` : ''}
-        ${filtroUsuario ? `<p><strong>Filtro usuario:</strong> ${filtroUsuario}</p>` : ''}
-        ${ordenamiento ? `<p><strong>Ordenado por:</strong> ${ordenTexto[ordenamiento] || ordenamiento}</p>` : ''}
-        <p><strong>Generado por:</strong> ${currentUser.name}</p>
-        <p><strong>Fecha:</strong> ${new Date().toLocaleString('es-MX')}</p>
-    `;
-    document.getElementById('download-btn').onclick = downloadPDF;
-    modal.classList.add('show');
-}
-
-function closeModal() {
-    document.getElementById('modal-overlay').classList.remove('show');
-}
-
-function downloadPDF() {
-    if (pdfBlob) {
-        const url = URL.createObjectURL(pdfBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Reporte_Asistencias_CESPSIC_${new Date().toISOString().split('T')[0]}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        showStatus('Reporte descargado', 'success');
-        setTimeout(() => {
-            hideStatus();
-            closeModal();
-        }, 2000);
     }
 }
