@@ -1386,6 +1386,9 @@ function closeModal() {
     document.getElementById('modal-overlay').classList.remove('show');
 }
 
+// Exponer al scope global para onclick en HTML
+window.closeModal = closeModal;
+
 function downloadFile(fechaDesde, fechaHasta, tipoReporte) {
     if (pdfBlob) {
         const url = URL.createObjectURL(pdfBlob);
@@ -1505,6 +1508,9 @@ function signOut() {
         showStatus('❌ Error cerrando sesión', 'error');
     }
 }
+
+// Exponer al scope global para onclick en HTML
+window.signOut = signOut;
 
 function showStatus(message, type) {
     const status = document.getElementById('status');
