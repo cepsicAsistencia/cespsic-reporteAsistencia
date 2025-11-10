@@ -7,11 +7,17 @@
     
     <!-- Google Sign-In API -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
-    <meta name="google-signin-client_id" content="799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.googleusercontent.com">
+	<!-- PRODUCCION -->
+    <!-- meta name="google-signin-client_id" content="799841037062-kal4vump3frc2f8d33bnp4clc9amdnng.apps.googleusercontent.com" -->
+	<!-- PRUEBAS -->
+	<meta name="google-signin-client_id" content="154864030871-ck4l5krb7qm68kmp6a7rcq7h072ldm6g.apps.googleusercontent.com">
     
     <!-- jsPDF Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    
+    <!-- SheetJS (XLSX) para exportación Excel -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     
     <!-- CSS -->
     <link rel="stylesheet" href="css/styles.css">
@@ -24,7 +30,7 @@
                 <img src="https://lh3.googleusercontent.com/d/12tYxfzWgy3BVYjadXOEKlX5-uSsxIrBt" alt="CESPSIC" class="logo">
                 <img src="https://lh3.googleusercontent.com/d/1tR9QzPGbydb_qjDkZOKsoNU6_xIBGQP2" alt="Facultad de Psicología" class="logo">
             </div>
-            <h1>Generador de Reportes de Asistencia - Centro de Servicios Psicológicos (CESPSIC) v.4.18</h1>
+            <h1>Generador de Reportes de Asistencia - Centro de Servicios Psicológicos (CESPSIC) v.4.19</h1>
         </div>
 
         <!-- Sección de Autenticación -->
@@ -122,6 +128,29 @@
                     </div>
                 </div>
 
+                <!-- NUEVA SECCIÓN: Tipo de Reporte (Solo Administradores) -->
+                <div class="form-section report-type-section" id="report-type-section" style="display: none;">
+                    <h3 style="color: #2e7d32; font-size: 1.1em; margin-bottom: 15px;">
+                        📊 Reportes Especiales (Administradores)
+                    </h3>
+                    
+                    <div class="report-buttons-container">
+                        <button type="button" class="special-report-btn" id="btn-reporte-horas">
+                            📅 Reporte de Horas por Día
+                            <small>Calcula horas trabajadas por día en formato calendario</small>
+                        </button>
+                        
+                        <button type="button" class="special-report-btn excel-btn" id="btn-export-excel">
+                            📊 Exportar Todo a Excel
+                            <small>Exporta todos los 43 campos a formato Excel</small>
+                        </button>
+                    </div>
+                    
+                    <div class="admin-info" style="background: #e8f5e9; border-left: 4px solid #4caf50; padding: 12px; border-radius: 6px; margin-top: 10px;">
+                        <strong>💡 Nota:</strong> Los reportes especiales usan los mismos filtros de fecha y usuario configurados arriba.
+                    </div>
+                </div>
+
                 <div class="form-section">
                     <div class="form-group">
                         <label for="incluir_campos">Campos a incluir en el reporte:</label>
@@ -197,6 +226,7 @@
             </form>
         </div>
     </div>
+    
     <!-- Sección de visualización de asistencias (solo usuarios regulares) -->
     <div class="attendance-view-section" id="attendance-view-section" style="display: none;">
         <div class="form-section">
@@ -205,6 +235,7 @@
             <div class="attendance-list" id="attendance-list"></div>
         </div>
     </div>
+    
     <!-- Modal para descarga -->
     <div class="modal-overlay" id="modal-overlay">
         <div class="modal">
@@ -218,7 +249,7 @@
                 </div>
                 <div class="modal-actions">
                     <button class="download-btn" id="download-btn">
-                        📥 Descargar Reporte PDF
+                        📥 Descargar Archivo
                     </button>
                     <button class="modal-btn-secondary" onclick="closeModal()">
                         Cerrar
@@ -237,6 +268,10 @@
             }
         }
     </script>
-    <script src="js/reports.js"></script>
+    
+    <!-- Scripts de la aplicación (TIPO MODULE) -->
+    <script type="module" src="js/Config.js"></script>
+    <script type="module" src="js/firebase-service.js"></script>
+    <script type="module" src="js/reports.js"></script>
 </body>
 </html>
