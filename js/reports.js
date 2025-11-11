@@ -872,6 +872,9 @@ async function handleReporteHoras(e) {
     }
 }
 
+/**
+ * FUNCIÓN MODIFICADA: Generar PDF de Horas por Día con anchos optimizados
+ */
 async function generatePDFHorasPorDia(fechaDesde, fechaHasta) {
     const {jsPDF} = window.jspdf;
     const doc = new jsPDF('l', 'mm', 'a4');
@@ -896,11 +899,11 @@ async function generatePDFHorasPorDia(fechaDesde, fechaHasta) {
     doc.text(`Total usuarios: ${datosHoras.length}`, 10, 28);
     
     // Preparar headers de tabla
-    const headers = ['Nombre', 'Ap. Paterno', 'Ap. Materno', 'Tipo Est.', 'Modalidad'];
+    const headers = ['Nombre', 'Ap. Pat.', 'Ap. Mat.', 'Tipo Est.', 'Modalidad'];
     diasMostrar.forEach(dia => {
         headers.push(dia.dia);
     });
-    headers.push('Total Hrs');
+    headers.push('Total');
     
     // Preparar datos de tabla
     const tableData = datosHoras.map(usuario => {
@@ -922,26 +925,56 @@ async function generatePDFHorasPorDia(fechaDesde, fechaHasta) {
         return row;
     });
     
-    // Estilos de columnas
+    // ✅ ESTILOS OPTIMIZADOS DE COLUMNAS
     const columnStyles = {};
-    headers.forEach((header, index) => {
-        if (index < 5) {
-            columnStyles[index] = {fontSize: 6};
-        } else {
-            columnStyles[index] = {fontSize: 5, halign: 'center', cellWidth: 8};
-        }
-    });
     
-    // Generar tabla
+    // Columnas de información personal (más anchas para nombres completos)
+    columnStyles[0] = {fontSize: 6, cellWidth: 22, halign: 'left'};  // Nombre
+    columnStyles[1] = {fontSize: 6, cellWidth: 20, halign: 'left'};  // Ap. Paterno
+    columnStyles[2] = {fontSize: 6, cellWidth: 20, halign: 'left'};  // Ap. Materno
+    columnStyles[3] = {fontSize: 5, cellWidth: 16, halign: 'center'}; // Tipo Est.
+    columnStyles[4] = {fontSize: 5, cellWidth: 14, halign: 'center'}; // Modalidad
+    
+    // Columnas de días (más compactas: 5mm en lugar de 8mm)
+    for (let i = 5; i < headers.length - 1; i++) {
+        columnStyles[i] = {fontSize: 5, halign: 'center', cellWidth: 5};
+    }
+    
+    // Columna Total Hrs (destacada)
+    columnStyles[headers.length - 1] = {
+        fontSize: 6, 
+        halign: 'center', 
+        cellWidth: 10,
+        fontStyle: 'bold'
+    };
+    
+    // Generar tabla con márgenes reducidos para aprovechar espacio
     doc.autoTable({
         head: [headers],
         body: tableData,
         startY: 35,
-        styles: {fontSize: 5, cellPadding: 1, lineColor: [200,200,200], lineWidth: 0.1},
-        headStyles: {fillColor: [102,126,234], textColor: 255, fontStyle: 'bold', fontSize: 5},
-        alternateRowStyles: {fillColor: [248,249,250]},
+        styles: {
+            fontSize: 5, 
+            cellPadding: 0.8, 
+            lineColor: [200,200,200], 
+            lineWidth: 0.1,
+            overflow: 'linebreak',
+            cellWidth: 'wrap'
+        },
+        headStyles: {
+            fillColor: [102,126,234], 
+            textColor: 255, 
+            fontStyle: 'bold', 
+            fontSize: 5,
+            halign: 'center',
+            valign: 'middle'
+        },
+        alternateRowStyles: {
+            fillColor: [248,249,250]
+        },
         columnStyles: columnStyles,
-        margin: {left: 5, right: 5}
+        margin: {left: 5, right: 5, top: 35, bottom: 15},
+        tableWidth: 'auto'
     });
     
     // Footer con leyenda
