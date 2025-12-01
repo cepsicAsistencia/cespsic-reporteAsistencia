@@ -992,10 +992,10 @@ function parsearFechaDDMMYYYY(fechaStr) {
 }
 
 function calcularRangoDias(fechaDesde, fechaHasta) {
-    const desde = parsearFechaDDMMYYYY(fechaDesde);
-    const hasta = parsearFechaDDMMYYYY(fechaHasta);
-    //const desde = new Date(fechaDesde);
-    //const hasta = new Date(fechaHasta);
+    //const desde = parsearFechaDDMMYYYY(fechaDesde);
+    //const hasta = parsearFechaDDMMYYYY(fechaHasta);
+    const desde = new Date(fechaDesde);
+    const hasta = new Date(fechaHasta);
     
     const diffTime = Math.abs(hasta - desde);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
