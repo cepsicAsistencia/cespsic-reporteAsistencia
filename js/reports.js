@@ -1010,30 +1010,43 @@ function calcularRangoDias(fechaDesde, fechaHasta) {
     
     if (diffDays > 31) {
         // Más de un mes: mostrar solo 1 mes hacia atrás desde fechaHasta
-        fechaFin = new Date(hasta);
-        fechaInicio = new Date(hasta);
+        fechaFin = new Date(hasta.getFullYear(), hasta.getMonth(), hasta.getDate());
+        fechaInicio = new Date(hasta.getFullYear(), hasta.getMonth(), hasta.getDate());
         fechaInicio.setDate(fechaInicio.getDate() - 30);
     } else {
         // Menos de un mes: mostrar rango completo
-        fechaInicio = new Date(desde);
-        fechaFin = new Date(hasta);
+        fechaInicio = new Date(desde.getFullYear(), desde.getMonth(), desde.getDate());
+        fechaFin = new Date(hasta.getFullYear(), hasta.getMonth(), hasta.getDate());
     }
     
     // Generar array de días
     const dias = [];
-    const currentDate = new Date(fechaInicio);
+    const currentDate = new Date(fechaInicio.getFullYear(), fechaInicio.getMonth(), fechaInicio.getDate());
     
     while (currentDate <= fechaFin) {
+        // ✅ CONSTRUIR FECHA MANUALMENTE (sin conversión UTC)
+        const year = currentDate.getFullYear();
+        const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+        const day = String(currentDate.getDate()).padStart(2, '0');
+        
         dias.push({
-            fecha: currentDate.toISOString().split('T')[0],
-            dia: currentDate.getDate().toString().padStart(2, '0')
+            fecha: `${year}-${month}-${day}`,  // ✅ String manual
+            dia: day                            // ✅ Día local
         });
+        
         currentDate.setDate(currentDate.getDate() + 1);
     }
     
+    // ✅ CONSTRUIR STRINGS DE RETORNO MANUALMENTE
+    const fechaInicioStr = `${fechaInicio.getFullYear()}-${String(fechaInicio.getMonth() + 1).padStart(2, '0')}-${String(fechaInicio.getDate()).padStart(2, '0')}`;
+    const fechaFinStr = `${fechaFin.getFullYear()}-${String(fechaFin.getMonth() + 1).padStart(2, '0')}-${String(fechaFin.getDate()).padStart(2, '0')}`;
+    
+    console.log('  Total días generados:', dias.length);
+    console.log('  Primer día:', dias[0]?.dia, 'Último día:', dias[dias.length - 1]?.dia);
+    
     return {
-        fechaInicio: fechaInicio.toISOString().split('T')[0],
-        fechaFin: fechaFin.toISOString().split('T')[0],
+        fechaInicio: fechaInicioStr,
+        fechaFin: fechaFinStr,
         dias: dias
     };
 }
