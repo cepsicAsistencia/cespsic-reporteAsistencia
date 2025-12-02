@@ -986,16 +986,22 @@ async function generatePDFHorasPorDia(fechaDesde, fechaHasta) {
     pdfBlob = doc.output('blob');
 }
 
-function parsearFechaDDMMYYYY(fechaStr) {
-    const [dia, mes, anio] = fechaStr.split('/').map(Number);
-    return new Date(anio, mes - 1, dia);
+function parseISODateSafe(dateString) {
+    if (!dateString) return null;
+    const [year, month, day] = dateString.split('-').map(Number);
+    return new Date(year, month - 1, day, 0, 0, 0, 0);
 }
 
 function calcularRangoDias(fechaDesde, fechaHasta) {
-    //const desde = parsearFechaDDMMYYYY(fechaDesde);
-    //const hasta = parsearFechaDDMMYYYY(fechaHasta);
-    const desde = new Date(fechaDesde);
-    const hasta = new Date(fechaHasta);
+    // Parsear fechas de forma segura sin problemas de zona horaria
+    const desde = parseISODateSafe(fechaDesde);
+    const hasta = parseISODateSafe(fechaHasta);
+    //const desde = new Date(fechaDesde);
+    //const hasta = new Date(fechaHasta);    
+    if (!desde || !hasta) {
+        console.error('Error parseando fechas:', fechaDesde, fechaHasta);
+        return { fechaInicio: fechaDesde, fechaFin: fechaHasta, dias: [] };
+    }
     
     const diffTime = Math.abs(hasta - desde);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
