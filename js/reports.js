@@ -847,27 +847,66 @@ async function handleReporteHoras(e) {
         return;
     }
     
-    const fechaDesde = document.getElementById('fecha_desde').value;
-    const fechaHasta = document.getElementById('fecha_hasta').value;
+    let fechaDesde = document.getElementById('fecha_desde').value;
+    let fechaHasta = document.getElementById('fecha_hasta').value;
+    const mesCompleto = document.getElementById('checkbox-mes-completo')?.checked || false;
+    
+    console.log('🔘 Checkbox "Generar mes completo":', mesCompleto ? 'MARCADO ✓' : 'DESMARCADO ✗');
+    
+    // ✅ Si está en modo mes completo, ajustar fechas para buscar TODO EL MES
+    if (mesCompleto) {
+        const fechaHastaObj = parseISODateSafe(fechaHasta);
+        if (fechaHastaObj) {
+            const year = fechaHastaObj.getFullYear();
+            const month = fechaHastaObj.getMonth();
+            
+            // Primer día del mes
+            const primerDia = new Date(year, month, 1);
+            fechaDesde = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+            
+            // Último día del mes
+            const ultimoDia = new Date(year, month + 1, 0);
+            fechaHasta = `${year}-${String(month + 1).padStart(2, '0')}-${String(ultimoDia.getDate()).padStart(2, '0')}`;
+            
+            console.log('📅 Rango ajustado para mes completo:', fechaDesde, 'al', fechaHasta);
+        }
+    }
     
     if (!fechaDesde || !fechaHasta || !validateDates()) return;
     
-    showStatus('⏳ Generando reporte de horas...', 'loading');
+    const statusMsg = mesCompleto 
+        ? '⏳ Generando reporte de asistencias (mes completo)...' 
+        : '⏳ Generando reporte de horas...';
+    showStatus(statusMsg, 'loading');
     
     try {
+        // ✅ Actualizar los filtros temporalmente para la búsqueda
+        const fechaDesdeInput = document.getElementById('fecha_desde');
+        const fechaHastaInput = document.getElementById('fecha_hasta');
+        const fechaDesdeOriginal = fechaDesdeInput.value;
+        const fechaHastaOriginal = fechaHastaInput.value;
+        
+        // Ajustar inputs para la búsqueda
+        fechaDesdeInput.value = fechaDesde;
+        fechaHastaInput.value = fechaHasta;
+        
         await fetchAttendanceDataFromFirebase();
+        
+        // Restaurar valores originales
+        fechaDesdeInput.value = fechaDesdeOriginal;
+        fechaHastaInput.value = fechaHastaOriginal;
         
         if (!attendanceData || attendanceData.length === 0) {
             showStatus('⚠️ Sin registros en este período', 'error');
             return;
         }
         
-        await generatePDFHorasPorDia(fechaDesde, fechaHasta);
+        await generatePDFHorasPorDia(fechaDesde, fechaHasta, mesCompleto);
         showDownloadModal(fechaDesde, fechaHasta, 'horas');
         hideStatus();
         
     } catch (error) {
-        console.error('❌ Error generando reporte de horas:', error);
+        console.error('❌ Error generando reporte:', error);
         showStatus('❌ Error: ' + error.message, 'error');
     }
 }
@@ -875,35 +914,63 @@ async function handleReporteHoras(e) {
 /**
  * FUNCIÓN MODIFICADA: Generar PDF de Horas por Día con anchos optimizados
  */
-async function generatePDFHorasPorDia(fechaDesde, fechaHasta) {
+async function generatePDFHorasPorDia(fechaDesde, fechaHasta, mesCompleto = false) {
     const {jsPDF} = window.jspdf;
     const doc = new jsPDF('l', 'mm', 'a4');
     doc.setFont('helvetica');
     
+    // ✅ DETERMINAR MODO: checkbox marcado = tipos de registro, desmarcado = horas
+    const modoTiposRegistro = mesCompleto;
+    
+    console.log('=== GENERANDO REPORTE PDF ===');
+    console.log('📊 Modo:', modoTiposRegistro ? 'ASISTENCIAS (Todos los tipos)' : 'HORAS (Solo E/S)');
+    console.log('📅 Mes completo:', mesCompleto ? 'SÍ' : 'NO');
+    console.log('📆 Fechas recibidas:', fechaDesde, 'al', fechaHasta);
+    
     // Calcular rango de días a mostrar
-    const rangoFechas = calcularRangoDias(fechaDesde, fechaHasta);
+    const rangoFechas = calcularRangoDias(fechaDesde, fechaHasta, mesCompleto);
     const diasMostrar = rangoFechas.dias;
     
     // Preparar datos agrupados por usuario y día
-    const datosHoras = prepareHorasPorDia(diasMostrar);
+    const datosHoras = prepareHorasPorDia(diasMostrar, modoTiposRegistro);
     
     // Generar encabezado
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('REPORTE DE HORAS POR DÍA - CESPSIC', 148, 12, {align: 'center'});
+    const titulo = modoTiposRegistro 
+        ? 'REPORTE DE ASISTENCIAS POR DÍA - CESPSIC' 
+        : 'REPORTE DE HORAS POR DÍA - CESPSIC';
+    doc.text(titulo, 148, 12, {align: 'center'});
     
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     doc.text(`Generado por: ${currentUser.name}`, 10, 20);
-    doc.text(`Período: ${rangoFechas.fechaInicio} al ${rangoFechas.fechaFin}`, 10, 24);
-    doc.text(`Total usuarios: ${datosHoras.length}`, 10, 28);
+    doc.text(`Email: ${currentUser.email}`, 10, 24);
+    doc.text(`Fecha: ${new Date().toLocaleString('es-MX')}`, 10, 28);
+    
+    // ✅ Información según el modo
+    if (modoTiposRegistro) {
+        const fechaObj = parseISODateSafe(rangoFechas.fechaFin);
+        const mesNombre = fechaObj.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
+        doc.text(`Mes: ${mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1)}`, 10, 32);
+        //doc.text(`Días mostrados: 1 al ${rangoFechas.fechaFin.split('-')[2]}`, 10, 36);
+    } else {
+        doc.text(`Período: ${rangoFechas.fechaInicio} al ${rangoFechas.fechaFin}`, 10, 32);
+        //doc.text(`Total registros: ${attendanceData.length}`, 10, 36);
+    }
+    
+    //doc.text(`Total usuarios: ${datosHoras.length}`, 200, 36);
     
     // Preparar headers de tabla
     const headers = ['Nombre', 'Ap. Pat.', 'Ap. Mat.', 'Tipo Est.', 'Modalidad'];
     diasMostrar.forEach(dia => {
         headers.push(dia.dia);
     });
-    headers.push('Total');
+    
+    // ✅ Solo agregar columna Total si NO está en modo tipos de registro
+    if (!modoTiposRegistro) {
+        headers.push('Total');
+    }
     
     // Preparar datos de tabla
     const tableData = datosHoras.map(usuario => {
@@ -917,14 +984,22 @@ async function generatePDFHorasPorDia(fechaDesde, fechaHasta) {
         
         diasMostrar.forEach(dia => {
             const fechaKey = dia.fecha;
-            row.push(usuario.horasPorDia[fechaKey] || '');
+            // ✅ Usar el campo correcto según el modo
+            if (modoTiposRegistro) {
+                row.push(usuario.registrosPorDia[fechaKey] || '');
+            } else {
+                row.push(usuario.horasPorDia[fechaKey] || '');
+            }
         });
         
-        row.push(usuario.totalHoras.toFixed(1));
+        // ✅ Solo agregar total si NO está en modo tipos de registro
+        if (!modoTiposRegistro) {
+            row.push(usuario.totalHoras.toFixed(1));
+        }
         
         return row;
     });
-    
+         
     // ✅ ESTILOS OPTIMIZADOS DE COLUMNAS
     const columnStyles = {};
     
@@ -940,13 +1015,16 @@ async function generatePDFHorasPorDia(fechaDesde, fechaHasta) {
         columnStyles[i] = {fontSize: 5, halign: 'center', cellWidth: 5};
     }
     
-    // Columna Total Hrs (destacada)
-    columnStyles[headers.length - 1] = {
-        fontSize: 6, 
-        halign: 'center', 
-        cellWidth: 10,
-        fontStyle: 'bold'
-    };
+    // ✅ Solo aplicar estilo a columna Total si NO está en modo tipos de registro
+    if (!modoTiposRegistro) {
+        // Columna Total Hrs (destacada)
+        columnStyles[headers.length - 1] = {
+            fontSize: 6, 
+            halign: 'center', 
+            cellWidth: 10,
+            fontStyle: 'bold'
+        };
+    }
     
     // Generar tabla con márgenes reducidos para aprovechar espacio
     doc.autoTable({
@@ -980,7 +1058,15 @@ async function generatePDFHorasPorDia(fechaDesde, fechaHasta) {
     // Footer con leyenda
     const finalY = doc.lastAutoTable.finalY + 5;
     doc.setFontSize(7);
-    doc.text('Leyenda: (vacío) = Sin registro | X = Registro incompleto | Números = Horas trabajadas', 10, finalY);
+    
+    // ✅ Leyenda según el modo
+    const leyenda = modoTiposRegistro
+        ? 'Leyenda: E=Entrada | S=Salida | P=Permiso | F=Día Festivo | N=No Abrió Clínica | O=Otro | (vacío)=Sin registro'
+        : 'Leyenda: (vacío)=Sin registro | X=Registro incompleto (falta Entrada o Salida) | Números=Horas trabajadas (solo E/S)';
+
+doc.text(leyenda, 10, finalY);
+    
+    doc.text(leyenda, 10, finalY);
     
     addPDFFooter(doc);
     pdfBlob = doc.output('blob');
@@ -992,31 +1078,51 @@ function parseISODateSafe(dateString) {
     return new Date(year, month - 1, day, 0, 0, 0, 0);
 }
 
-function calcularRangoDias(fechaDesde, fechaHasta) {
+function calcularRangoDias(fechaDesde, fechaHasta, mesCompleto = false) {
     // Parsear fechas de forma segura sin problemas de zona horaria
     const desde = parseISODateSafe(fechaDesde);
     const hasta = parseISODateSafe(fechaHasta);
-    //const desde = new Date(fechaDesde);
-    //const hasta = new Date(fechaHasta);    
+    
     if (!desde || !hasta) {
         console.error('Error parseando fechas:', fechaDesde, fechaHasta);
         return { fechaInicio: fechaDesde, fechaFin: fechaHasta, dias: [] };
     }
     
-    const diffTime = Math.abs(hasta - desde);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
     let fechaInicio, fechaFin;
     
-    if (diffDays > 31) {
-        // Más de un mes: mostrar solo 1 mes hacia atrás desde fechaHasta
-        fechaFin = new Date(hasta.getFullYear(), hasta.getMonth(), hasta.getDate());
-        fechaInicio = new Date(hasta.getFullYear(), hasta.getMonth(), hasta.getDate());
-        fechaInicio.setDate(fechaInicio.getDate() - 30);
+    if (mesCompleto) {
+        // ✅ MODO MES COMPLETO: Mostrar TODOS los días del mes de la fecha "hasta"
+        const year = hasta.getFullYear();
+        const month = hasta.getMonth();
+        
+        // Primer día del mes
+        fechaInicio = new Date(year, month, 1, 0, 0, 0, 0);
+        
+        // Último día del mes (día 0 del mes siguiente = último día del mes actual)
+        fechaFin = new Date(year, month + 1, 0, 0, 0, 0, 0);
+        
+        console.log('📅 Modo MES COMPLETO activado');
+        console.log('  Mes:', fechaInicio.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' }));
+        console.log('  Generando días del 1 al', fechaFin.getDate());
     } else {
-        // Menos de un mes: mostrar rango completo
-        fechaInicio = new Date(desde.getFullYear(), desde.getMonth(), desde.getDate());
-        fechaFin = new Date(hasta.getFullYear(), hasta.getMonth(), hasta.getDate());
+        // ✅ MODO HORAS: usar rango fecha desde - fecha hasta
+        const diffTime = Math.abs(hasta - desde);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays > 31) {
+            // Más de un mes: mostrar solo 31 días hacia atrás desde fechaHasta
+            fechaFin = new Date(hasta.getFullYear(), hasta.getMonth(), hasta.getDate());
+            fechaInicio = new Date(hasta.getFullYear(), hasta.getMonth(), hasta.getDate());
+            fechaInicio.setDate(fechaInicio.getDate() - 30);
+            console.log('⚠️ Rango > 31 días, ajustado a últimos 31 días');
+        } else {
+            // Usar rango exacto desde-hasta
+            fechaInicio = new Date(desde.getFullYear(), desde.getMonth(), desde.getDate());
+            fechaFin = new Date(hasta.getFullYear(), hasta.getMonth(), hasta.getDate());
+        }
+        
+        console.log('📊 Modo HORAS activado');
+        console.log('  Rango:', fechaInicio.toLocaleDateString('es-MX'), 'al', fechaFin.toLocaleDateString('es-MX'));
     }
     
     // Generar array de días
@@ -1030,8 +1136,8 @@ function calcularRangoDias(fechaDesde, fechaHasta) {
         const day = String(currentDate.getDate()).padStart(2, '0');
         
         dias.push({
-            fecha: `${year}-${month}-${day}`,  // ✅ String manual
-            dia: day                            // ✅ Día local
+            fecha: `${year}-${month}-${day}`,  // ✅ String manual YYYY-MM-DD
+            dia: day                            // ✅ Solo día (01, 02, ... 31)
         });
         
         currentDate.setDate(currentDate.getDate() + 1);
@@ -1041,8 +1147,8 @@ function calcularRangoDias(fechaDesde, fechaHasta) {
     const fechaInicioStr = `${fechaInicio.getFullYear()}-${String(fechaInicio.getMonth() + 1).padStart(2, '0')}-${String(fechaInicio.getDate()).padStart(2, '0')}`;
     const fechaFinStr = `${fechaFin.getFullYear()}-${String(fechaFin.getMonth() + 1).padStart(2, '0')}-${String(fechaFin.getDate()).padStart(2, '0')}`;
     
-    console.log('  Total días generados:', dias.length);
-    console.log('  Primer día:', dias[0]?.dia, 'Último día:', dias[dias.length - 1]?.dia);
+    console.log('  ✅ Total días generados:', dias.length);
+    console.log('  📅 Días:', `${dias[0]?.dia} al ${dias[dias.length - 1]?.dia}`);
     
     return {
         fechaInicio: fechaInicioStr,
@@ -1051,7 +1157,7 @@ function calcularRangoDias(fechaDesde, fechaHasta) {
     };
 }
 
-function prepareHorasPorDia(diasMostrar) {
+function prepareHorasPorDia(diasMostrar, modoTiposRegistro = false) {
     // Agrupar registros por usuario
     const usuariosMap = new Map();
     
@@ -1080,36 +1186,66 @@ function prepareHorasPorDia(diasMostrar) {
         });
     });
     
-    // Calcular horas por día para cada usuario
+    // ✅ Calcular según el modo
     const datosHoras = [];
     
     usuariosMap.forEach(usuario => {
-        const horasPorDia = {};
-        let totalHoras = 0;
+        const resultado = {};
         
-        diasMostrar.forEach(dia => {
-            const fecha = dia.fecha;
-            const registros = usuario.registrosPorDia[fecha] || [];
+        if (modoTiposRegistro) {
+            // MODO TIPOS DE REGISTRO: Calcular iniciales
+            const registrosPorDia = {};
             
-            if (registros.length === 0) {
-                horasPorDia[fecha] = '';
-            } else {
-                const horas = calcularHorasDia(registros);
-                horasPorDia[fecha] = horas.display;
-                if (horas.value > 0) {
-                    totalHoras += horas.value;
+            diasMostrar.forEach(dia => {
+                const fecha = dia.fecha;
+                const registros = usuario.registrosPorDia[fecha] || [];
+                
+                if (registros.length === 0) {
+                    registrosPorDia[fecha] = '';
+                } else {
+                    const iniciales = calcularInicialesDia(registros);
+                    registrosPorDia[fecha] = iniciales;
                 }
-            }
-        });
+            });
+            
+            resultado.registrosPorDia = registrosPorDia;
+            
+        } else {
+            // ✅ MODO HORAS: Calcular horas (SOLO Entrada y Salida)
+            const horasPorDia = {};
+            let totalHoras = 0;
+            
+            diasMostrar.forEach(dia => {
+                const fecha = dia.fecha;
+                const registros = usuario.registrosPorDia[fecha] || [];
+                
+                if (registros.length === 0) {
+                    // Sin registros = vacío
+                    horasPorDia[fecha] = '';
+                } else {
+                    // Calcular horas SOLO con Entrada y Salida
+                    const horas = calcularHorasDia(registros);
+                    horasPorDia[fecha] = horas.display;
+                    
+                    // Solo sumar si hay horas válidas
+                    if (horas.value > 0) {
+                        totalHoras += horas.value;
+                    }
+                }
+            });
+            
+            resultado.horasPorDia = horasPorDia;
+            resultado.totalHoras = totalHoras;
+        }
         
+        // Agregar datos comunes
         datosHoras.push({
             nombre: usuario.nombre,
             apellidoPaterno: usuario.apellidoPaterno,
             apellidoMaterno: usuario.apellidoMaterno,
             tipoEstudiante: usuario.tipoEstudiante,
             modalidad: usuario.modalidad,
-            horasPorDia: horasPorDia,
-            totalHoras: totalHoras
+            ...resultado
         });
     });
     
@@ -1124,10 +1260,18 @@ function prepareHorasPorDia(diasMostrar) {
 }
 
 function calcularHorasDia(registros) {
-    // Separar entradas y salidas
-    const entradas = registros.filter(r => r.tipoRegistro && r.tipoRegistro.toLowerCase() === 'entrada');
-    const salidas = registros.filter(r => r.tipoRegistro && r.tipoRegistro.toLowerCase() === 'salida');
+    // ✅ MODO HORAS: SOLO considerar Entrada y Salida
+    const entradas = registros.filter(r => {
+        const tipo = (r.tipoRegistro || '').toLowerCase().trim();
+        return tipo === 'entrada';
+    });
     
+    const salidas = registros.filter(r => {
+        const tipo = (r.tipoRegistro || '').toLowerCase().trim();
+        return tipo === 'salida';
+    });
+    
+    // Si no hay entrada O no hay salida, marcar como incompleto
     if (entradas.length === 0 || salidas.length === 0) {
         return {display: 'X', value: 0};
     }
@@ -1150,6 +1294,84 @@ function calcularHorasDia(registros) {
         display: horas.toFixed(1),
         value: horas
     };
+}
+
+/**
+ * ✅ NUEVA FUNCIÓN: Calcular iniciales de tipos de registro para un día
+ * Retorna: E, S, P, F, N, O o combinaciones como E/S
+ */
+function calcularInicialesDia(registros) {
+    if (!registros || registros.length === 0) {
+        return '';
+    }
+    
+    // Set para evitar duplicados y mantener orden
+    const inicialesSet = new Set();
+    const ordenPreferido = ['E', 'S', 'P', 'F', 'N', 'O'];
+    
+    registros.forEach(registro => {
+        const tipoRegistro = (registro.tipoRegistro || '').toLowerCase().trim();
+        
+        // ✅ Limpiar texto: eliminar acentos y normalizar
+        const tipoNormalizado = tipoRegistro
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "") // Quitar acentos
+            .replace(/\s+/g, ' ')             // Normalizar espacios
+            .trim();
+        
+        let inicialEncontrada = null;
+        
+        // ✅ BUSCAR EN ORDEN DE ESPECIFICIDAD (más específico primero)
+        
+        // 1. Entrada
+        if (tipoNormalizado === 'entrada') {
+            inicialEncontrada = 'E';
+        }
+        // 2. Salida
+        else if (tipoNormalizado === 'salida') {
+            inicialEncontrada = 'S';
+        }
+        // 3. Permiso
+        else if (tipoNormalizado === 'permiso' || tipoNormalizado.includes('permiso')) {
+            inicialEncontrada = 'P';
+        }
+        // 4. Día Festivo
+        else if (tipoNormalizado.includes('festivo') || tipoNormalizado.includes('dia festivo')) {
+            inicialEncontrada = 'F';
+        }
+        // 5. No Abrió Clínica (PRIORIDAD ALTA - antes de "Otro")
+        else if (tipoNormalizado.includes('no abrio') || 
+                 tipoNormalizado.includes('noabrioclinica') || 
+                 tipoNormalizado.includes('no abrio clinica') ||
+                 tipoNormalizado.includes('clinica cerrada') ||
+                 tipoNormalizado.includes('no se abrio')) {
+            inicialEncontrada = 'N';
+        }
+        // 6. Otro (SIEMPRE AL FINAL)
+        else if (tipoNormalizado === 'otro' || tipoNormalizado.includes('otro')) {
+            inicialEncontrada = 'O';
+        }
+        // 7. No reconocido (por defecto 'O')
+        else if (tipoNormalizado !== '') {
+            console.warn('⚠️ Tipo de registro no reconocido:', tipoRegistro);
+            inicialEncontrada = tipoNormalizado;
+        }
+        
+        // Agregar inicial encontrada
+        if (inicialEncontrada) {
+            inicialesSet.add(inicialEncontrada);
+        }
+    });
+    
+    if (inicialesSet.size === 0) {
+        return '';
+    }
+    
+    // Ordenar según el orden preferido
+    const inicialesOrdenadas = ordenPreferido.filter(inicial => inicialesSet.has(inicial));
+    
+    // Unir con '/'
+    return inicialesOrdenadas.join('/');
 }
 
 function convertirHoraAMinutos(horaStr) {
